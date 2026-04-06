@@ -87,21 +87,21 @@ export default function SendMoneyPage() {
                   className="relative"
                 >
                   {/* Glow behind phone */}
-                  <div className="absolute -inset-6 bg-gradient-to-br from-primary/20 via-teal/10 to-accent/10 rounded-[3rem] blur-2xl opacity-60" />
+                  <div className="absolute -inset-6 rounded-[3rem] blur-2xl opacity-60" style={{ background: "linear-gradient(to bottom right, rgba(73,37,106,0.2), rgba(17,168,75,0.1), rgba(255,230,129,0.1))" }} />
 
                   {/* Phone frame */}
-                  <div className="relative w-[320px] lg:w-[340px]">
-                    {/* Outer frame */}
-                    <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-[2.5rem] p-[6px] shadow-[0_30px_80px_-20px_rgba(73,37,106,0.35)]">
+                  <div className="relative w-[280px] lg:w-[300px]">
+                    {/* Outer frame — realistic iPhone proportions */}
+                    <div className="rounded-[2.8rem] p-[10px] shadow-[0_30px_80px_-15px_rgba(0,0,0,0.4)]" style={{ background: "linear-gradient(to bottom, #1f1f1f, #0d0d0d)" }}>
                       {/* Inner bezel */}
                       <div className="bg-white rounded-[2.2rem] overflow-hidden relative">
                         {/* Dynamic Island */}
-                        <div className="absolute top-3 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20 flex items-center justify-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-gray-800 ring-1 ring-gray-700" />
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 w-[90px] h-[26px] bg-black rounded-full z-20 flex items-center justify-center gap-2">
+                          <div className="w-[7px] h-[7px] rounded-full" style={{ background: "#1a1a1a", boxShadow: "inset 0 0 2px rgba(255,255,255,0.1)" }} />
                         </div>
 
                         {/* Status bar */}
-                        <div className="bg-white px-6 pt-2 pb-0 flex items-center justify-between text-[10px] font-semibold text-gray-800 relative z-10">
+                        <div className="bg-white px-5 pt-2 pb-0 flex items-center justify-between text-[10px] font-semibold text-gray-800 relative z-10">
                           <span>10:22</span>
                           <div className="flex items-center gap-1">
                             <div className="flex gap-[2px]">
@@ -114,20 +114,20 @@ export default function SendMoneyPage() {
                         </div>
 
                         {/* Screen content */}
-                        <div className="bg-gradient-to-b from-white via-gray-50/50 to-primary/5 px-6 pb-8 pt-6 min-h-[480px] lg:min-h-[520px] flex flex-col items-center justify-center">
+                        <div className="px-5 pb-6 pt-5 flex flex-col items-center justify-center" style={{ minHeight: "420px", background: "linear-gradient(to bottom, #ffffff, #faf9fc, #f3f0f7)" }}>
                           {/* Animated send icon */}
                           <motion.div
                             animate={{ y: [0, -8, 0] }}
                             transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-                            className="mb-6"
+                            className="mb-5"
                           >
-                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal/20 to-teal/5 flex items-center justify-center shadow-lg shadow-teal/10">
-                              <Send className="w-9 h-9 text-teal" />
+                            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(135deg, rgba(17,168,75,0.15), rgba(17,168,75,0.05))", boxShadow: "0 8px 24px rgba(17,168,75,0.1)" }}>
+                              <Send className="w-7 h-7 text-teal" />
                             </div>
                           </motion.div>
 
-                          <p className="text-sm text-gray-400 font-medium mb-0.5">Money Transfer</p>
-                          <p className="text-[11px] text-gray-300 mb-6">To</p>
+                          <p className="text-xs text-gray-400 font-medium mb-0.5">Money Transfer</p>
+                          <p className="text-[10px] text-gray-300 mb-5">To</p>
 
                           <motion.div
                             initial={{ opacity: 0, scale: 0.9 }}
@@ -135,13 +135,13 @@ export default function SendMoneyPage() {
                             transition={{ delay: 0.6, duration: 0.5 }}
                             className="text-center"
                           >
-                            <p className="text-xl font-bold text-black mb-1">Bright Okpocha</p>
+                            <p className="text-lg font-bold text-black mb-1">Bright Okpocha</p>
                             <motion.p
                               key={numAmount}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ duration: 0.4 }}
-                              className="text-4xl font-extrabold text-primary"
+                              className="text-3xl font-extrabold text-primary"
                             >
                               ${(numAmount * 1.27).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </motion.p>
@@ -152,7 +152,8 @@ export default function SendMoneyPage() {
                             initial={{ opacity: 0, scale: 0 }}
                             animate={{ opacity: 1, scale: 1 }}
                             transition={{ delay: 1, type: "spring", stiffness: 200 }}
-                            className="mt-6 flex items-center gap-2 bg-teal/10 text-teal px-4 py-2 rounded-full"
+                            className="mt-5 flex items-center gap-2 text-teal px-4 py-2 rounded-full"
+                            style={{ background: "rgba(17,168,75,0.1)" }}
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             <span className="text-xs font-semibold">Transfer Ready</span>
@@ -160,8 +161,8 @@ export default function SendMoneyPage() {
                         </div>
 
                         {/* Home indicator */}
-                        <div className="h-8 bg-white flex items-center justify-center">
-                          <div className="w-32 h-1 bg-gray-300 rounded-full" />
+                        <div className="h-7 bg-white flex items-center justify-center">
+                          <div className="w-28 h-1 bg-gray-300 rounded-full" />
                         </div>
                       </div>
                     </div>
