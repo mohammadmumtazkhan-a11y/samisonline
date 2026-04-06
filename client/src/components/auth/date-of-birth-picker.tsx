@@ -232,26 +232,32 @@ export default function DateOfBirthPicker({
           </DialogTrigger>
 
           <DialogContent
-            className="w-auto p-0 gap-0 overflow-hidden border-none rounded-2xl bg-white"
-            style={{ boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)" }}
+            className="p-0 gap-0 overflow-hidden border-none rounded-2xl bg-white"
+            style={{
+              boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+              width: "min(320px, 92vw)",
+              maxWidth: "320px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
           >
             {/* Premium gradient header — Samis purple, all inline for Safari */}
             <div
               style={{
                 background: "linear-gradient(135deg, #49256a 0%, #6b3fa0 50%, #49256a 100%)",
-                padding: "1.25rem",
+                padding: "1rem 1rem",
                 color: "#fff",
               }}
             >
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.85 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.125rem" }}>
+                <span style={{ fontSize: "0.7rem", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.85 }}>
                   Select Date of Birth
                 </span>
-                <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "2rem", fontWeight: 700, letterSpacing: "-0.025em" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: "0.375rem" }}>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.025em" }}>
                     {selectedDate ? format(selectedDate, "d") : "--"}
                   </span>
-                  <span style={{ fontSize: "1.25rem", fontWeight: 300, opacity: 0.9 }}>
+                  <span style={{ fontSize: "1rem", fontWeight: 300, opacity: 0.9 }}>
                     {selectedDate ? format(selectedDate, "MMMM yyyy") : "Pick a date"}
                   </span>
                 </div>
@@ -259,22 +265,22 @@ export default function DateOfBirthPicker({
             </div>
 
             {/* Month / Year dropdowns */}
-            <div style={{ padding: "1rem 1rem 0", backgroundColor: "#fff" }}>
-              <div className="flex items-center justify-between mb-3 px-1">
+            <div style={{ padding: "0.75rem 0.5rem 0", backgroundColor: "#fff" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem", gap: "0.5rem" }}>
                 <Select
                   value={monthNames[calMonth.getMonth()]}
                   onValueChange={handleMonthDropdown}
                 >
                   <SelectTrigger
-                    className="w-[130px] h-9 border-none font-semibold text-sm"
-                    style={{ backgroundColor: "#f3f0f7", color: "#49256a", boxShadow: "none" }}
+                    className="h-8 border-none font-semibold text-xs"
+                    style={{ backgroundColor: "#f3f0f7", color: "#49256a", boxShadow: "none", width: "115px", minWidth: "115px" }}
                   >
                     <SelectValue placeholder="Month" />
                   </SelectTrigger>
                   <SelectContent>
                     <ScrollArea className="h-[200px]">
                       {monthNames.map((m) => (
-                        <SelectItem key={m} value={m} className="font-medium cursor-pointer">{m}</SelectItem>
+                        <SelectItem key={m} value={m} className="font-medium cursor-pointer text-sm">{m}</SelectItem>
                       ))}
                     </ScrollArea>
                   </SelectContent>
@@ -285,15 +291,15 @@ export default function DateOfBirthPicker({
                   onValueChange={handleYearDropdown}
                 >
                   <SelectTrigger
-                    className="w-[90px] h-9 border-none font-semibold text-sm"
-                    style={{ backgroundColor: "#f3f0f7", color: "#49256a", boxShadow: "none" }}
+                    className="h-8 border-none font-semibold text-xs"
+                    style={{ backgroundColor: "#f3f0f7", color: "#49256a", boxShadow: "none", width: "80px", minWidth: "80px" }}
                   >
                     <SelectValue placeholder="Year" />
                   </SelectTrigger>
                   <SelectContent>
                     <ScrollArea className="h-[200px]">
                       {years.map((y) => (
-                        <SelectItem key={y} value={y.toString()} className="font-medium cursor-pointer">{y}</SelectItem>
+                        <SelectItem key={y} value={y.toString()} className="font-medium cursor-pointer text-sm">{y}</SelectItem>
                       ))}
                     </ScrollArea>
                   </SelectContent>
@@ -311,14 +317,15 @@ export default function DateOfBirthPicker({
                 }
                 classNames={{
                   nav: "hidden",
-                  caption: "hidden",
+                  month_caption: "hidden",
                 }}
-                className="p-0 pointer-events-auto"
+                className="p-0 pointer-events-auto [--cell-size:1.75rem] text-sm"
+                style={{ width: "100%" }}
               />
             </div>
 
             {/* Bottom padding */}
-            <div style={{ height: "0.75rem", backgroundColor: "#fff" }} />
+            <div style={{ height: "0.5rem", backgroundColor: "#fff" }} />
           </DialogContent>
         </Dialog>
       </div>
