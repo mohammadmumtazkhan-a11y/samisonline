@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Safari compatibility: ensure backdrop-filter works */
+@supports (-webkit-backdrop-filter: blur(1px)) {
+  .backdrop-blur-sm {
+    -webkit-backdrop-filter: blur(4px);
+  }
+}
+
 @theme {
   --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
@@ -89,8 +96,10 @@
   pointer-events: auto;
 }
 
-/* Left 2 (the slide immediately before swiper-slide-prev) */
-.showcase-swiper .swiper-slide:has(+ .swiper-slide-prev) {
+/* Left 2 (the slide immediately before swiper-slide-prev) —
+   Using both :has() for modern browsers and a JS-applied class for Safari fallback */
+.showcase-swiper .swiper-slide:has(+ .swiper-slide-prev),
+.showcase-swiper .swiper-slide.swiper-slide-prev-prev {
   opacity: 0.4 !important;
   visibility: visible;
   pointer-events: auto;

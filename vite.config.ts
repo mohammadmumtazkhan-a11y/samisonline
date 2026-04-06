@@ -15,6 +15,8 @@ export default defineConfig({
   build: {
     outDir: "../dist/public",
     emptyOutDir: true,
+    target: ["es2020", "safari14"],
+    cssTarget: ["safari14"],
   },
   server: {
     proxy: {

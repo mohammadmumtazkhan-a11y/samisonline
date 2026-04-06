@@ -68,6 +68,13 @@
     "ws": "^8.18.0",
     "zod": "^3.24.0"
   },
+  "browserslist": [
+    ">0.3%",
+    "last 2 versions",
+    "safari >= 14",
+    "ios >= 14",
+    "not dead"
+  ],
   "devDependencies": {
     "@playwright/test": "^1.49.0",
     "@tailwindcss/vite": "^4.0.0",
