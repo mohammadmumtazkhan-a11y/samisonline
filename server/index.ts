@@ -2,7 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import session from "express-session";
 import { registerRoutes } from "./routes";
-import { setupVite } from "./vite";
+import { setupVite, serveStatic } from "./vite";
 
 const app = express();
 app.use(express.json());
@@ -51,12 +51,14 @@ app.use((req, res, next) => {
 
   const server = createServer(app);
 
-  // In development, set up Vite middleware
-  if (process.env.NODE_ENV !== "production") {
+  // In development, set up Vite middleware; in production, serve static build
+  if (process.env.NODE_ENV === "production") {
+    await serveStatic(app);
+  } else {
     await setupVite(app, server);
   }
 
-  const port = 5000;
+  const port = parseInt(process.env.PORT || "5000", 10);
   server.listen(port, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${port}`);
   });
