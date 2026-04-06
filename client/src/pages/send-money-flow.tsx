@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -96,6 +96,7 @@ export default function SendMoney() {
     const [isSubmittingTransaction, setIsSubmittingTransaction] = useState(false);
     const [showExpiryPopup, setShowExpiryPopup] = useState(false);
     const [expiryCountdown, setExpiryCountdown] = useState(5);
+    const expiryRedirectFired = useRef(false);
 
     // Bonus State - Hardcoded for Prototype
     const [bonusBalance] = useState(5);
@@ -274,6 +275,7 @@ export default function SendMoney() {
     // Auto-redirect countdown when expiry popup is shown
     useEffect(() => {
         if (!showExpiryPopup) return;
+        expiryRedirectFired.current = false; // reset guard for this new expiry event
         setExpiryCountdown(5);
         const interval = setInterval(() => {
             setExpiryCountdown((prev) => {
@@ -289,6 +291,10 @@ export default function SendMoney() {
     }, [showExpiryPopup]);
 
     const handleExpiryRedirect = useCallback(() => {
+        // Guard: only fire once even if called from both the timer and the button
+        if (expiryRedirectFired.current) return;
+        expiryRedirectFired.current = true;
+
         setShowExpiryPopup(false);
         setShowBankTransferPage(false);
         setPaymentTimerActive(false);
