@@ -1,10 +1,87 @@
 @import "tailwindcss";
 
-/* Safari compatibility: ensure backdrop-filter works */
-@supports (-webkit-backdrop-filter: blur(1px)) {
-  .backdrop-blur-sm {
-    -webkit-backdrop-filter: blur(4px);
-  }
+/*
+ * ─── Safari / older browser fallbacks ───
+ * Tailwind CSS v4 uses @property declarations to set initial values for
+ * custom properties. Safari versions with incomplete @property support
+ * need these fallback initial values set on every element, just like
+ * Tailwind v3 did with its preflight/base layer.
+ */
+*, ::before, ::after, ::backdrop {
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-translate-z: 0;
+  --tw-rotate-x: ;
+  --tw-rotate-y: ;
+  --tw-rotate-z: ;
+  --tw-skew-x: ;
+  --tw-skew-y: ;
+  --tw-space-y-reverse: 0;
+  --tw-space-x-reverse: 0;
+  --tw-divide-y-reverse: 0;
+  --tw-border-style: solid;
+  --tw-gradient-position: ;
+  --tw-gradient-from: #0000;
+  --tw-gradient-via: #0000;
+  --tw-gradient-to: #0000;
+  --tw-gradient-stops: ;
+  --tw-gradient-via-stops: ;
+  --tw-gradient-from-position: 0%;
+  --tw-gradient-via-position: 50%;
+  --tw-gradient-to-position: 100%;
+  --tw-leading: ;
+  --tw-font-weight: ;
+  --tw-tracking: ;
+  --tw-ordinal: ;
+  --tw-slashed-zero: ;
+  --tw-numeric-figure: ;
+  --tw-numeric-spacing: ;
+  --tw-numeric-fraction: ;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-color: ;
+  --tw-shadow-alpha: 100%;
+  --tw-inset-shadow: 0 0 #0000;
+  --tw-inset-shadow-color: ;
+  --tw-inset-shadow-alpha: 100%;
+  --tw-ring-color: ;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-inset-ring-color: ;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  --tw-ring-inset: ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-outline-style: solid;
+  --tw-blur: ;
+  --tw-brightness: ;
+  --tw-contrast: ;
+  --tw-grayscale: ;
+  --tw-hue-rotate: ;
+  --tw-invert: ;
+  --tw-opacity: ;
+  --tw-saturate: ;
+  --tw-sepia: ;
+  --tw-drop-shadow: ;
+  --tw-drop-shadow-color: ;
+  --tw-drop-shadow-alpha: 100%;
+  --tw-drop-shadow-size: ;
+  --tw-backdrop-blur: ;
+  --tw-backdrop-brightness: ;
+  --tw-backdrop-contrast: ;
+  --tw-backdrop-grayscale: ;
+  --tw-backdrop-hue-rotate: ;
+  --tw-backdrop-invert: ;
+  --tw-backdrop-opacity: ;
+  --tw-backdrop-saturate: ;
+  --tw-backdrop-sepia: ;
+  --tw-duration: ;
+  --tw-ease: ;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-scale-z: 1;
+  --tw-content: "";
+  /* Safari -webkit- prefixes for backdrop-filter */
+  -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);
 }
 
 @theme {
@@ -46,6 +123,31 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
   }
+}
+
+/* Safari-safe select element styling */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+  background-color: #fff;
+}
+
+/* Safari-safe date input */
+input[type="date"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Safari-safe backdrop-filter */
+.backdrop-blur-sm {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 /* Hide ALL scrollbars globally for horizontal overflow containers */

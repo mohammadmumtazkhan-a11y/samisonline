@@ -25,6 +25,9 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dob, setDob] = useState("");
+  const [dobDay, setDobDay] = useState("");
+  const [dobMonth, setDobMonth] = useState("");
+  const [dobYear, setDobYear] = useState("");
   const [gender, setGender] = useState("");
   const [mobileCode, setMobileCode] = useState("+44");
   const [mobileNumber, setMobileNumber] = useState("");
@@ -129,11 +132,28 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
   };
 
   const fieldClass = (name: string) =>
-    `w-full px-3 py-2.5 text-sm rounded-lg border focus:outline-none focus:ring-1 ${
+    `w-full px-3 py-2.5 text-sm rounded-lg border focus:outline-none focus:ring-1 appearance-none bg-white ${
       errors[name]
         ? "border-red-400 focus:border-red-500 focus:ring-red-200"
-        : "border-gray-300 focus:border-primary focus:ring-primary/20"
+        : "border-gray-300 focus:border-primary focus:ring-secondary"
     }`;
+
+  // Sync DD/MM/YYYY fields → ISO dob string
+  const handleDobPart = (part: "day" | "month" | "year", value: string) => {
+    const numOnly = value.replace(/\D/g, "");
+    const d = part === "day" ? numOnly.slice(0, 2) : dobDay;
+    const m = part === "month" ? numOnly.slice(0, 2) : dobMonth;
+    const y = part === "year" ? numOnly.slice(0, 4) : dobYear;
+    if (part === "day") setDobDay(d);
+    if (part === "month") setDobMonth(m);
+    if (part === "year") setDobYear(y);
+    if (d.length === 2 && m.length === 2 && y.length === 4) {
+      setDob(`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`);
+      setErrors((p) => ({ ...p, dob: "" }));
+    } else {
+      setDob("");
+    }
+  };
 
   return (
     <div>
@@ -164,7 +184,12 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
           {/* Country */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Country <span className="text-red-500">*</span></label>
-            <select value={country} onChange={(e) => handleCountryChange(e.target.value)} className={fieldClass("country")}>
+            <select
+              value={country}
+              onChange={(e) => handleCountryChange(e.target.value)}
+              className={fieldClass("country")}
+              style={{ WebkitAppearance: "none", MozAppearance: "none", paddingRight: "2rem", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center" }}
+            >
               {countries.map((c) => (
                 <option key={c.code} value={c.code}>{c.name}</option>
               ))}
@@ -191,21 +216,69 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
             <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} placeholder="Middle name" className={fieldClass("middleName")} />
           </div>
 
-          {/* DOB + Gender */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Date of Birth <span className="text-red-500">*</span></label>
-              <input type="date" value={dob} onChange={(e) => { setDob(e.target.value); setErrors(p => ({...p, dob: ""})); }} className={fieldClass("dob")} />
-              {errors.dob && <p className="text-xs text-red-500 mt-1">{errors.dob}</p>}
+          {/* DOB */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Date of Birth <span className="text-red-500">*</span></label>
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="DD"
+                maxLength={2}
+                value={dobDay}
+                onChange={(e) => {
+                  handleDobPart("day", e.target.value);
+                  if (e.target.value.replace(/\D/g, "").length === 2) {
+                    (e.target.nextElementSibling?.nextElementSibling as HTMLInputElement)?.focus?.();
+                  }
+                }}
+                className={fieldClass("dob")}
+                style={{ textAlign: "center" }}
+              />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="MM"
+                maxLength={2}
+                value={dobMonth}
+                onChange={(e) => {
+                  handleDobPart("month", e.target.value);
+                  if (e.target.value.replace(/\D/g, "").length === 2) {
+                    (e.target.nextElementSibling as HTMLInputElement)?.focus?.();
+                  }
+                }}
+                className={fieldClass("dob")}
+                style={{ textAlign: "center" }}
+              />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="YYYY"
+                maxLength={4}
+                value={dobYear}
+                onChange={(e) => handleDobPart("year", e.target.value)}
+                className={fieldClass("dob")}
+                style={{ textAlign: "center" }}
+              />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Gender <span className="text-red-500">*</span></label>
-              <select value={gender} onChange={(e) => { setGender(e.target.value); setErrors(p => ({...p, gender: ""})); }} className={fieldClass("gender")}>
+            {errors.dob && <p className="text-xs text-red-500 mt-1">{errors.dob}</p>}
+          </div>
+
+          {/* Gender */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Gender <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <select
+                value={gender}
+                onChange={(e) => { setGender(e.target.value); setErrors(p => ({...p, gender: ""})); }}
+                className={fieldClass("gender")}
+                style={{ WebkitAppearance: "none", MozAppearance: "none", paddingRight: "2rem", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center" }}
+              >
                 <option value="">Select gender</option>
                 {genders.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
-              {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
             </div>
+            {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
           </div>
 
           {/* Phone */}
