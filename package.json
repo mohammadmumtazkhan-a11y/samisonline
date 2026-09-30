@@ -68,6 +68,13 @@
     "ws": "^8.18.0",
     "zod": "^3.24.0"
   },
+  "browserslist": [
+    ">0.3%",
+    "last 2 versions",
+    "safari >= 14",
+    "ios >= 14",
+    "not dead"
+  ],
   "devDependencies": {
     "@playwright/test": "^1.49.0",
     "@tailwindcss/vite": "^4.0.0",
@@ -79,8 +86,10 @@
     "@types/react-dom": "^19.0.0",
     "@types/ws": "^8.5.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "browserslist": "^4.28.2",
     "drizzle-kit": "^0.30.0",
     "esbuild": "^0.24.0",
+    "lightningcss": "^1.32.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",

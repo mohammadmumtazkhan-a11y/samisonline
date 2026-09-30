@@ -129,6 +129,10 @@ export function AddBeneficiaryModal({
           // Mobile: bottom sheet · Desktop: centred dialog
           "max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0 max-sm:rounded-t-3xl max-sm:border-x-0 max-sm:border-b-0",
           "sm:max-w-lg sm:rounded-2xl",
+          // Desktop: pin to the viewport (no reliance on translate centering) so the dialog can never hang off-screen
+          "sm:top-[4dvh] sm:translate-y-0 sm:max-h-[92dvh]",
+          // Centre horizontally with left/right + auto margins instead of translate (older browsers ignore the CSS `translate` property)
+          "left-0 right-0 mx-auto translate-x-0",
           // Keep the built-in close (X) above the sticky header, with a comfortable tap target
           "[&>button:last-child]:z-20 [&>button:last-child]:right-3 [&>button:last-child]:top-3 [&>button:last-child]:p-2 [&>button:last-child]:rounded-full [&>button:last-child]:bg-background"
         )}

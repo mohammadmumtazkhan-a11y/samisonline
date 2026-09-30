@@ -6,6 +6,7 @@ import { countries, genders } from "@/data/countries";
 import AccountTypeToggle from "./account-type-toggle";
 import PasswordInput from "./password-input";
 import PhoneInput from "./phone-input";
+import DateOfBirthPicker from "./date-of-birth-picker";
 
 interface SignUpFormProps {
   email: string;
@@ -129,11 +130,17 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
   };
 
   const fieldClass = (name: string) =>
-    `w-full px-3 py-2.5 text-base sm:text-sm rounded-lg border focus:outline-none focus:ring-1 ${
+    `w-full px-3 py-2.5 text-base sm:text-sm rounded-lg border focus:outline-none focus:ring-1 appearance-none bg-white ${
       errors[name]
         ? "border-red-400 focus:border-red-500 focus:ring-red-200"
-        : "border-gray-300 focus:border-primary focus:ring-primary/20"
+        : "border-gray-300 focus:border-primary focus:ring-secondary"
     }`;
+
+  // DOB change handler from DateOfBirthPicker
+  const handleDobChange = (iso: string) => {
+    setDob(iso);
+    if (iso) setErrors((p) => ({ ...p, dob: "" }));
+  };
 
   return (
     <div>
@@ -164,7 +171,12 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
           {/* Country */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">Country <span className="text-red-500">*</span></label>
-            <select value={country} onChange={(e) => handleCountryChange(e.target.value)} className={fieldClass("country")}>
+            <select
+              value={country}
+              onChange={(e) => handleCountryChange(e.target.value)}
+              className={fieldClass("country")}
+              style={{ WebkitAppearance: "none", MozAppearance: "none", paddingRight: "2rem", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center" }}
+            >
               {countries.map((c) => (
                 <option key={c.code} value={c.code}>{c.name}</option>
               ))}
@@ -191,21 +203,28 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
             <input value={middleName} onChange={(e) => setMiddleName(e.target.value)} placeholder="Middle name" className={fieldClass("middleName")} />
           </div>
 
-          {/* DOB + Gender */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Date of Birth <span className="text-red-500">*</span></label>
-              <input type="date" value={dob} onChange={(e) => { setDob(e.target.value); setErrors(p => ({...p, dob: ""})); }} className={fieldClass("dob")} />
-              {errors.dob && <p className="text-xs text-red-500 mt-1">{errors.dob}</p>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Gender <span className="text-red-500">*</span></label>
-              <select value={gender} onChange={(e) => { setGender(e.target.value); setErrors(p => ({...p, gender: ""})); }} className={fieldClass("gender")}>
+          {/* DOB — premium picker with keyboard + calendar */}
+          <DateOfBirthPicker
+            value={dob}
+            onChange={handleDobChange}
+            error={errors.dob}
+          />
+
+          {/* Gender */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Gender <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <select
+                value={gender}
+                onChange={(e) => { setGender(e.target.value); setErrors(p => ({...p, gender: ""})); }}
+                className={fieldClass("gender")}
+                style={{ WebkitAppearance: "none", MozAppearance: "none", paddingRight: "2rem", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 0.75rem center" }}
+              >
                 <option value="">Select gender</option>
                 {genders.map((g) => <option key={g} value={g}>{g}</option>)}
               </select>
-              {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
             </div>
+            {errors.gender && <p className="text-xs text-red-500 mt-1">{errors.gender}</p>}
           </div>
 
           {/* Phone */}
