@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #49256a;
+  --color-primary-foreground: #ffffff;
+  --color-destructive: #c4203a;
+  --color-destructive-foreground: #ffffff;
+  --color-teal: #11a84b;
+  --color-teal-foreground: #ffffff;
+  --color-purple: #49256a;
+  --color-accent: #ffe681;
+  --color-accent-foreground: #000000;
+  --color-secondary: #e3cff5;
+  --color-secondary-foreground: #49256a;
+  --color-background: #ffffff;
+  --color-card: #ffffff;
+  --color-card-foreground: #000000;
+  --color-foreground: #000000;
+  --color-muted: #f3f0f7;
+  --color-muted-foreground: #6b6b6b;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #000000;
+  --color-border: #e5e7eb;
+  --color-input: #e5e7eb;
+  --color-ring: #49256a;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    margin: 0;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+  }
+}
+
+/* Hide ALL scrollbars globally for horizontal overflow containers */
+.scrollbar-hide,
+[class*="overflow-x"] {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+.scrollbar-hide::-webkit-scrollbar,
+[class*="overflow-x"]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ─── Showcase Swiper carousel ─── */
+.showcase-swiper {
+  padding-bottom: 50px !important;
+}
+
+.showcase-swiper .swiper-wrapper {
+  align-items: center;
+}
+
+.showcase-swiper .swiper-slide {
+  transition: transform 0.6s ease, opacity 0.6s ease, visibility 0.6s ease;
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.showcase-swiper .swiper-slide-active {
+  opacity: 1 !important;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.showcase-swiper .swiper-slide-active > div {
+  box-shadow: 0 30px 60px -15px rgba(73, 37, 106, 0.3);
+}
+
+/* Left 1 and Right 1 */
+.showcase-swiper .swiper-slide-prev,
+.showcase-swiper .swiper-slide-next {
+  opacity: 0.75 !important;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Left 2 (the slide immediately before swiper-slide-prev) */
+.showcase-swiper .swiper-slide:has(+ .swiper-slide-prev) {
+  opacity: 0.4 !important;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Right 2 (the slide immediately after swiper-slide-next) */
+.showcase-swiper .swiper-slide-next + .swiper-slide {
+  opacity: 0.4 !important;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Custom pagination bullets */
+.showcase-swiper .swiper-pagination {
+  bottom: 0 !important;
+}
+
+.swiper-bullet {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #d1d5db;
+  margin: 0 5px !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.swiper-bullet-active {
+  background: #49256a !important;
+  width: 28px;
+}
