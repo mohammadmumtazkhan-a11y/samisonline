@@ -36,12 +36,12 @@ export default function SendMoneyPage() {
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header — Samis Online branded */}
       <header className="bg-white border-b border-gray-200">
-        <div className="w-full px-5 py-4 flex items-center justify-between">
-          <button onClick={() => navigate("/")} className="flex items-center gap-3">
+        <div className="w-full px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <button onClick={() => navigate("/")} className="flex items-center gap-3 shrink-0" aria-label="Samis Online home">
             <img
               src="/assets/logo.svg"
               alt="Samis Online"
-              className="h-10 w-auto"
+              className="h-9 sm:h-10 w-auto"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.onerror = null;
@@ -50,15 +50,15 @@ export default function SendMoneyPage() {
             />
             <span className="text-primary font-bold text-2xl hidden sm:inline">Samis Online Money</span>
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             <button
               onClick={() => navigate("/")}
-              className="text-sm text-gray-600 hover:text-primary transition-colors flex items-center gap-1"
+              className="text-sm text-gray-600 hover:text-primary transition-colors flex items-center gap-1 h-10 sm:h-auto px-2 sm:px-0 rounded-xl hover:bg-gray-50 sm:hover:bg-transparent"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to Store
+              <span className="hidden min-[380px]:inline">Back to</span> Store
             </button>
-            <button onClick={() => navigate("/auth")} className="bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-full px-5 py-2 transition-colors">
+            <button onClick={() => navigate("/auth")} className="bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-full px-5 h-10 sm:h-auto sm:py-2 transition-colors">
               Sign In
             </button>
           </div>
@@ -67,17 +67,17 @@ export default function SendMoneyPage() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="bg-gradient-to-b from-gray-50 to-white py-12 sm:py-16">
-          <div className="max-w-6xl mx-auto px-5">
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-center text-black mb-4 tracking-tight">
+        <section className="bg-gradient-to-b from-gray-50 to-white pt-8 pb-12 sm:py-16 lg:py-10">
+          <div className="max-w-6xl mx-auto px-4 sm:px-5">
+            <h1 className="text-[28px] max-sm:leading-tight sm:text-4xl md:text-5xl lg:text-[42px] font-extrabold text-center text-black mb-3 sm:mb-4 tracking-tight">
               SEND MONEY NOW
             </h1>
-            <p className="text-center text-gray-500 text-sm sm:text-base max-w-lg mx-auto mb-10">
+            <p className="text-center text-gray-500 text-sm sm:text-base max-sm:leading-relaxed max-w-lg mx-auto mb-7 sm:mb-10 lg:mb-8 max-sm:px-1">
               Supporting families or paying international suppliers, skip bank lines and send money the modern way: fast, secure and reliable.
             </p>
 
             {/* Transfer Widget + Phone Mockup */}
-            <div className="grid md:grid-cols-2 gap-10 items-stretch max-w-5xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-stretch max-w-5xl mx-auto">
               {/* Phone Mockup — premium, larger, animated */}
               <div className="hidden md:flex justify-center">
                 <motion.div
@@ -171,12 +171,12 @@ export default function SendMoneyPage() {
               </div>
 
               {/* Transfer Calculator — matches phone height */}
-              <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-7 sm:p-8 flex flex-col justify-between">
+              <div className="min-w-0 bg-white border border-gray-200 rounded-3xl sm:rounded-2xl shadow-[0_12px_40px_-16px_rgba(73,37,106,0.25)] sm:shadow-sm p-5 sm:p-8 lg:p-6 flex flex-col justify-between">
                 <div>
                   {/* You Send */}
-                  <div className="mb-6 relative z-20">
+                  <div className="mb-6 lg:mb-4 relative z-20">
                     <label className="text-sm text-gray-500 mb-2 block font-medium">You Send</label>
-                    <div className="flex items-center border border-gray-200 rounded-lg">
+                    <div className="flex items-center border border-gray-200 rounded-xl sm:rounded-lg bg-white focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-shadow">
                       <CurrencyPicker
                         value={sendCurrency}
                         onChange={setSendCurrency}
@@ -184,18 +184,20 @@ export default function SendMoneyPage() {
                       />
                       <input
                         type="number"
+                        inputMode="decimal"
+                        aria-label="You send amount"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className="flex-1 px-4 py-3.5 text-right text-lg font-semibold text-black focus:outline-none rounded-r-lg"
+                        className="flex-1 min-w-0 w-0 px-4 py-3.5 lg:py-3 text-right text-xl sm:text-lg lg:text-base font-semibold text-black focus:outline-none rounded-r-xl sm:rounded-r-lg"
                         min="0"
                       />
                     </div>
                   </div>
 
                   {/* Recipient Gets */}
-                  <div className="mb-6 relative z-10">
+                  <div className="mb-6 lg:mb-4 relative z-10">
                     <label className="text-sm text-gray-500 mb-2 block font-medium">Recipient Gets</label>
-                    <div className="flex items-center border border-gray-200 rounded-lg">
+                    <div className="flex items-center border border-gray-200 rounded-xl sm:rounded-lg bg-gray-50/60 sm:bg-white">
                       <CurrencyPicker
                         value={receiveCurrency}
                         onChange={setReceiveCurrency}
@@ -205,13 +207,14 @@ export default function SendMoneyPage() {
                         type="text"
                         value={receiveAmount}
                         readOnly
-                        className="flex-1 px-4 py-3.5 text-right text-lg font-semibold text-black bg-white focus:outline-none rounded-r-lg"
+                        aria-label="Recipient gets amount"
+                        className="flex-1 min-w-0 w-0 px-4 py-3.5 lg:py-3 text-right text-xl sm:text-lg lg:text-base font-semibold text-teal sm:text-black bg-transparent sm:bg-white focus:outline-none rounded-r-xl sm:rounded-r-lg"
                       />
                     </div>
                   </div>
 
                   {/* Details */}
-                  <div className="space-y-3.5 py-4 border-t border-gray-100">
+                  <div className="space-y-3.5 lg:space-y-2.5 py-4 lg:py-3 border-t border-gray-100">
                     <div className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-2 text-gray-500">
                         <Send className="w-4 h-4 text-primary" />
@@ -230,22 +233,22 @@ export default function SendMoneyPage() {
                         {fee} {sendCurrency}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-gray-500">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="flex items-center gap-2 text-gray-500 shrink-0">
                         <TrendingUp className="w-4 h-4 text-primary" />
                         Exchange Rate
                       </span>
-                      <span className="font-medium text-black">
+                      <span className="font-medium text-black text-right">
                         1 {sendCurrency} = {rate.toFixed(2)} {receiveCurrency}
                       </span>
                     </div>
                   </div>
 
                   {/* Total */}
-                  <div className="flex items-center justify-between py-4 border-t border-gray-200">
-                    <span className="font-bold text-black text-lg">Total To Pay</span>
-                    <span className="font-bold text-2xl text-black">
-                      {numAmount.toFixed(2)}
+                  <div className="flex items-center justify-between py-4 lg:py-3 border-t border-gray-200">
+                    <span className="font-bold text-black text-base sm:text-lg">Total To Pay</span>
+                    <span className="font-bold text-2xl lg:text-xl text-black">
+                      {numAmount.toFixed(2)} <span className="text-base font-semibold text-gray-500 sm:hidden">{sendCurrency}</span>
                     </span>
                   </div>
                 </div>
@@ -254,7 +257,7 @@ export default function SendMoneyPage() {
                   {/* Send Button → takes user to auth */}
                   <button
                     onClick={() => navigate("/auth")}
-                    className="w-full bg-primary hover:bg-primary/90 text-white font-bold rounded-xl py-4 transition-colors text-lg"
+                    className="w-full bg-primary hover:bg-primary/90 active:scale-[0.99] text-white font-bold rounded-2xl sm:rounded-xl py-4 lg:py-3 transition-all text-lg lg:text-base shadow-[0_10px_24px_-10px_rgba(73,37,106,0.6)] sm:shadow-none"
                   >
                     Send Money
                   </button>
@@ -290,23 +293,23 @@ export default function SendMoneyPage() {
               alt="Samis Online"
               className="h-10 w-auto brightness-200"
             />
-            <div className="flex items-center gap-6 text-sm text-white/70">
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/70">
               <button className="hover:text-white transition-colors">About Us</button>
               <button className="hover:text-white transition-colors">FAQ</button>
               <button className="hover:text-white transition-colors">Support</button>
             </div>
           </div>
           <div className="border-t border-white/20 pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-[11px] text-white/50">
+            <p className="text-[11px] text-white/50 text-center sm:text-left">
               &copy; {new Date().getFullYear()} Mito.Money. All Rights Reserved Funtech Global Communications Ltd
             </p>
-            <div className="flex items-center gap-4 text-[11px] text-white/50">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-white/50">
               <button className="hover:text-white transition-colors">Terms</button>
               <button className="hover:text-white transition-colors">Privacy</button>
               <button className="hover:text-white transition-colors">Contact Us</button>
             </div>
           </div>
-          <p className="text-[10px] text-white/30 mt-3 leading-relaxed">
+          <p className="text-[10px] text-white/40 sm:text-white/30 mt-4 sm:mt-3 leading-relaxed text-center sm:text-left">
             Mito.money is a trademark owned by Funtech Global Communications Ltd. Devonshire House, Manor way, Borehamwood, Herts. WD6 1QQ, United Kingdom. A registered Payment institution in the UK with registration details FRN: 815146 MLR NO: 12803115
           </p>
         </div>

@@ -31,7 +31,7 @@ export default function PhoneInput({
         <select
           value={codeValue}
           onChange={(e) => onCodeChange(e.target.value)}
-          className={`w-[110px] px-2 py-2.5 text-sm rounded-lg border bg-white focus:outline-none focus:ring-1 ${
+          className={`w-[104px] sm:w-[110px] shrink-0 px-2 py-2.5 text-base sm:text-sm rounded-lg border bg-white focus:outline-none focus:ring-1 ${
             error
               ? "border-red-400 focus:border-red-500 focus:ring-red-200"
               : "border-gray-300 focus:border-primary focus:ring-primary/20"
@@ -52,7 +52,7 @@ export default function PhoneInput({
           }}
           placeholder="Phone number"
           required={required}
-          className={`flex-1 px-3 py-2.5 text-sm rounded-lg border focus:outline-none focus:ring-1 ${
+          className={`flex-1 min-w-0 px-3 py-2.5 text-base sm:text-sm rounded-lg border focus:outline-none focus:ring-1 ${
             error
               ? "border-red-400 focus:border-red-500 focus:ring-red-200"
               : "border-gray-300 focus:border-primary focus:ring-primary/20"

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowLeft, Check, ChevronRight, User, Building2,
@@ -17,17 +18,43 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { getQueryFn } from "@/lib/queryClient";
+import { AddBeneficiaryModal } from "@/components/AddBeneficiaryModal";
+import type { Beneficiary } from "@shared/schema";
+import {
+    NIGERIA_ACCOUNT_REGEX,
+    beneficiariesForCorridor,
+    beneficiaryColor,
+    beneficiaryInitials,
+    beneficiaryName,
+    maskAccount,
+    requiresNarration,
+    searchBeneficiaries,
+    serviceTypeForDeliveryMethod,
+} from "@/lib/beneficiaries";
 
 // Mock Data
 const EXCHANGE_RATE = 2025.50; // 1 GBP = 2025.50 NGN
 const FEE_PERCENTAGE = 0.01; // 1%
 
-// All saved recipients for existing customers (in production this comes from the API)
-const allRecipients = [
-    { id: 1, name: "Akshita Gupta", bank: "UK Bank", account: "12345678", initials: "AG", color: "bg-primary/10 text-primary" },
-    { id: 2, name: "Sarah Chen", bank: "Access Bank", account: "87654321", initials: "SC", color: "bg-purple-100 text-purple-600" },
-    { id: 3, name: "David Okonkwo", bank: "GTBank", account: "11223344", initials: "DO", color: "bg-green-100 text-green-600" },
-];
+// Corridor for this flow (step 1 is GBP → NGN): recipients are locked to Nigeria.
+const PAYOUT_CURRENCY = "NGN";
+const PAYOUT_COUNTRY = "Nigeria";
+
+/** Saved beneficiary + the display fields the recipient list renders. */
+type RecipientRow = Beneficiary & { name: string; bank: string; account: string; initials: string; color: string };
+
+const toRecipientRow = (b: Beneficiary): RecipientRow => ({
+    ...b,
+    name: beneficiaryName(b),
+    bank: b.bankName,
+    account: b.accountNumber,
+    initials: beneficiaryInitials(b),
+    color: beneficiaryColor(b.id),
+});
+
+type DetailErrors = Partial<Record<"firstName" | "lastName" | "otherReason" | "narration" | "bankName" | "accountNumber", string>>;
 
 const steps = [
     { id: 1, title: "Amount" },
@@ -37,15 +64,52 @@ const steps = [
     { id: 5, title: "Payment" }, // Was "Payment Method"
 ];
 
+/**
+ * Mobile: action buttons dock to the bottom of the screen (thumb-reach, respects the iPhone home bar).
+ * Desktop (lg+): identical to the previous inline button row.
+ */
+const actionBarClass =
+    "fixed inset-x-0 bottom-0 z-30 flex flex-col gap-2.5 border-t border-gray-100 bg-white/95 backdrop-blur-md px-4 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-10px_30px_-18px_rgba(73,37,106,0.45)] lg:static lg:z-auto lg:gap-0 lg:border-0 lg:bg-transparent lg:backdrop-blur-none lg:p-0 lg:pt-4 lg:shadow-none";
+const actionBtnClass = "flex-1 h-12 lg:h-11 text-base rounded-xl";
+
+/** One-line amount recap shown above the docked buttons on mobile only. */
+function MobileActionSummary({ label, value, subLabel, subValue }: { label: string; value: string; subLabel?: string; subValue?: string }) {
+    return (
+        <div className="flex items-end justify-between gap-3 lg:hidden">
+            <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{label}</p>
+                <p className="text-base font-bold text-foreground truncate">{value}</p>
+            </div>
+            {subLabel && subValue && (
+                <div className="min-w-0 text-right">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">{subLabel}</p>
+                    <p className="text-base font-bold text-teal truncate">{subValue}</p>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function SendMoney() {
     const [, setLocation] = useLocation();
     const { toast } = useToast();
     const [currentStep, setCurrentStep] = useState(1);
 
-    // Recipients — empty for new customers (flagged via sessionStorage after registration),
-    // full list for existing customers. In production this comes from the API.
+    // Recipients — saved beneficiaries from the API (mock: /api/beneficiaries), limited to the
+    // NGN corridor. New customers (flagged via sessionStorage after registration) don't see demo records.
     const isNewCustomer = sessionStorage.getItem("isNewCustomer") === "true";
-    const [recentRecipients, setRecentRecipients] = useState(isNewCustomer ? [] : allRecipients);
+    const beneficiariesQuery = useQuery<Beneficiary[]>({
+        queryKey: ["/api/beneficiaries"],
+        queryFn: getQueryFn({ on401: "throw" }) as () => Promise<Beneficiary[]>,
+    });
+    const [recipientSearch, setRecipientSearch] = useState("");
+    const [showAddRecipient, setShowAddRecipient] = useState(false);
+    const recentRecipients = useMemo(
+        () =>
+            beneficiariesForCorridor(beneficiariesQuery.data ?? [], PAYOUT_CURRENCY, { hideSeed: isNewCustomer }).map(toRecipientRow),
+        [beneficiariesQuery.data, isNewCustomer]
+    );
+    const filteredRecipients = useMemo(() => searchBeneficiaries(recentRecipients, recipientSearch), [recentRecipients, recipientSearch]);
 
     // Form State
     const [amount, setAmount] = useState<string>("500");
@@ -57,17 +121,80 @@ export default function SendMoney() {
     const [promoDiscount, setPromoDiscount] = useState(0);
     const [promoLoading, setPromoLoading] = useState(false);
 
-    const [selectedRecipient, setSelectedRecipient] = useState<any>(null);
+    const [selectedRecipient, setSelectedRecipient] = useState<RecipientRow | null>(null);
     const [recipientDetails, setRecipientDetails] = useState({
         firstName: "",
         lastName: "",
         relationship: "family",
         nickName: "",
         reason: "family_support",
+        otherReason: "",
+        // Banking fields (Rhemito "Banking Details" — NGN: bank name + 10-digit account)
         bankName: "",
         accountNumber: "",
+        currency: PAYOUT_CURRENCY,
+        country: PAYOUT_COUNTRY,
         narration: ""
     });
+    const [detailErrors, setDetailErrors] = useState<DetailErrors>({});
+    const isBusinessRecipient = selectedRecipient?.recipientType === "business";
+
+    // Pick a saved beneficiary → pre-fill Details (same as Rhemito) and go to step 3.
+    const selectRecipient = (r: RecipientRow) => {
+        sessionStorage.removeItem("isNewCustomer");
+        setSelectedRecipient(r);
+        setRecipientDetails(prev => ({
+            ...prev,
+            firstName: r.recipientType === "business" ? r.businessName : r.firstName,
+            lastName: r.recipientType === "business" ? "" : r.lastName,
+            relationship: ["family", "friend", "business"].includes((r.relationship || "").toLowerCase()) ? r.relationship.toLowerCase() : prev.relationship,
+            bankName: r.bankName,
+            accountNumber: r.accountNumber,
+            currency: r.currency,
+            country: r.country,
+            narration: r.narration || prev.narration,
+        }));
+        setDetailErrors({});
+        setCurrentStep(3);
+    };
+
+    const updateDetail = (field: keyof typeof recipientDetails, value: string) => {
+        setRecipientDetails(prev => ({ ...prev, [field]: value }));
+        if (detailErrors[field as keyof DetailErrors]) setDetailErrors(prev => ({ ...prev, [field]: undefined }));
+    };
+
+    /** Rhemito Details rules: names, reason (+ "Other"), narration for NGN, bank name + 10-digit account. */
+    const validateDetails = (): DetailErrors => {
+        const d = recipientDetails;
+        const errs: DetailErrors = {};
+        if (!d.firstName.trim()) errs.firstName = isBusinessRecipient ? "Business name is required" : "First name is required";
+        if (!isBusinessRecipient && !d.lastName.trim()) errs.lastName = "Last name is required";
+        if (d.reason === "other" && !d.otherReason.trim()) errs.otherReason = "Please specify the reason";
+        if (requiresNarration(d.country) && !d.narration.trim()) errs.narration = "Narration is required for Nigerian accounts";
+        if (!d.bankName.trim()) errs.bankName = "Bank name is required";
+        if (!d.accountNumber.trim()) errs.accountNumber = "Account number is required";
+        else if (d.currency === "NGN" && !NIGERIA_ACCOUNT_REGEX.test(d.accountNumber.trim())) errs.accountNumber = "Nigerian account numbers are 10 digits";
+        return errs;
+    };
+
+    const handleDetailsContinue = () => {
+        const errs = validateDetails();
+        setDetailErrors(errs);
+        if (Object.keys(errs).length > 0) {
+            toast({
+                title: "Please complete the required fields",
+                description: Object.values(errs)[0],
+                variant: "destructive",
+            });
+            return;
+        }
+        handleNext();
+    };
+
+    const reasonLabel = recipientDetails.reason === "other"
+        ? (recipientDetails.otherReason || "Other")
+        : recipientDetails.reason.replace('_', ' ');
+    const detailsFullName = `${recipientDetails.firstName} ${recipientDetails.lastName}`.trim() || "—";
 
     const [paymentMethod, setPaymentMethod] = useState("");
     const [showConfirmation, setShowConfirmation] = useState(false);
@@ -322,23 +449,23 @@ export default function SendMoney() {
 
     return (
         <DashboardLayout>
-            <div className="max-w-5xl mx-auto pb-10">
+            <div className="max-w-5xl mx-auto pb-44 lg:pb-10">
                 {/* Header */}
-                <div className="mb-6 flex items-center justify-between">
-                    <h1 className="text-2xl font-bold">Send Money</h1>
-                    <div className="text-sm text-muted-foreground">step {currentStep} of 5</div>
+                <div className="mb-5 sm:mb-6 lg:mb-4 flex items-center justify-between gap-3">
+                    <h1 className="text-[22px] sm:text-2xl lg:text-[22px] font-bold max-sm:tracking-tight">Send Money</h1>
+                    <div className="text-xs sm:text-sm max-sm:font-medium text-primary sm:text-muted-foreground bg-primary/10 sm:bg-transparent px-2.5 py-1 sm:p-0 rounded-full max-sm:first-letter:uppercase">step {currentStep} of 5</div>
                 </div>
 
                 {/* Stepper */}
-                <div className="flex items-center justify-between mb-8 px-4 md:px-12 relative">
-                    <div className="absolute left-0 top-1/2 w-full h-0.5 bg-gray-200 -z-10" />
+                <div className="flex items-start sm:items-center justify-between mb-6 sm:mb-8 lg:mb-6 px-0 sm:px-4 md:px-12 relative">
+                    <div className="absolute left-4 right-4 sm:left-0 sm:right-auto top-3.5 sm:top-1/2 sm:w-full h-0.5 bg-gray-200 -z-10" />
                     {steps.map((step) => (
-                        <div key={step.id} className="flex flex-col items-center bg-background px-2">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold mb-2 transition-colors ${currentStep >= step.id ? "bg-primary text-white" : "bg-gray-100 text-gray-400"
+                        <div key={step.id} className="flex flex-col items-center bg-background px-1 sm:px-2">
+                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-sm font-semibold mb-2 transition-colors ${currentStep >= step.id ? "bg-primary text-white" : "bg-gray-100 text-gray-400"
                                 }`}>
                                 {currentStep > step.id ? <Check className="w-4 h-4" /> : step.id}
                             </div>
-                            <span className={`text-xs ${currentStep >= step.id ? "text-primary font-medium" : "text-gray-400"}`}>
+                            <span className={`text-[11px] sm:text-xs ${currentStep >= step.id ? "text-primary font-medium" : "text-gray-400"}`}>
                                 {step.title}
                             </span>
                         </div>
@@ -354,22 +481,24 @@ export default function SendMoney() {
                             <motion.div
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 w-full"
+                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-6 w-full"
                             >
-                                <div className="lg:col-span-3 space-y-8">
+                                <div className="lg:col-span-3 space-y-6 sm:space-y-8 lg:space-y-5">
                                     <div className="space-y-2">
                                         <Label className="text-gray-500">You Send</Label>
-                                        <div className="flex bg-white border rounded-lg overflow-hidden h-14 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-                                            <div className="flex items-center gap-2 px-4 bg-gray-50 border-r min-w-[120px]">
-                                                <img src="https://flagcdn.com/w40/gb.png" alt="GBP" className="w-8 h-6 object-cover rounded shadow-sm" />
-                                                <span className="font-semibold text-lg">GBP</span>
+                                        <div className="flex bg-white border rounded-lg overflow-hidden h-14 lg:h-12 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                                            <div className="flex items-center gap-2 px-3 sm:px-4 bg-gray-50 border-r min-w-[104px] sm:min-w-[120px] lg:min-w-[108px] shrink-0">
+                                                <img src="https://flagcdn.com/w40/gb.png" alt="GBP" className="w-8 h-6 lg:w-6 lg:h-4 object-cover rounded shadow-sm" />
+                                                <span className="font-semibold text-lg lg:text-base">GBP</span>
                                                 <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
                                             </div>
                                             <input
                                                 type="number"
+                                                inputMode="decimal"
+                                                aria-label="You send amount"
                                                 value={amount}
                                                 onChange={e => setAmount(e.target.value)}
-                                                className="flex-1 px-4 text-lg font-medium outline-none"
+                                                className="flex-1 min-w-0 w-0 px-4 text-xl sm:text-lg lg:text-base font-semibold sm:font-medium outline-none"
                                                 placeholder="0.00"
                                             />
                                         </div>
@@ -377,24 +506,25 @@ export default function SendMoney() {
 
                                     <div className="space-y-2">
                                         <Label className="text-gray-500">They Receive</Label>
-                                        <div className="flex bg-white border rounded-lg overflow-hidden h-14 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
-                                            <div className="flex items-center gap-2 px-4 bg-gray-50 border-r min-w-[120px]">
-                                                <img src="https://flagcdn.com/w40/ng.png" alt="NGN" className="w-8 h-6 object-cover rounded shadow-sm" />
-                                                <span className="font-semibold text-lg">NGN</span>
+                                        <div className="flex bg-white border rounded-lg overflow-hidden h-14 lg:h-12 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all">
+                                            <div className="flex items-center gap-2 px-3 sm:px-4 bg-gray-50 border-r min-w-[104px] sm:min-w-[120px] lg:min-w-[108px] shrink-0">
+                                                <img src="https://flagcdn.com/w40/ng.png" alt="NGN" className="w-8 h-6 lg:w-6 lg:h-4 object-cover rounded shadow-sm" />
+                                                <span className="font-semibold text-lg lg:text-base">NGN</span>
                                                 <ChevronDown className="w-4 h-4 text-gray-400 ml-auto" />
                                             </div>
                                             <input
                                                 readOnly
+                                                aria-label="They receive amount"
                                                 value={receiveAmount}
-                                                className="flex-1 px-4 text-lg font-medium outline-none bg-gray-50 text-gray-500"
+                                                className="flex-1 min-w-0 w-0 px-4 text-xl sm:text-lg lg:text-base font-semibold sm:font-medium outline-none bg-gray-50 text-teal sm:text-gray-500"
                                             />
                                         </div>
                                     </div>
 
 
-                                    <div className="space-y-4">
-                                        <h3 className="font-semibold text-lg">How will they receive the money?</h3>
-                                        <div className="flex flex-wrap gap-4">
+                                    <div className="space-y-4 lg:space-y-3">
+                                        <h3 className="font-semibold text-base sm:text-lg lg:text-base">How will they receive the money?</h3>
+                                        <div className="grid grid-cols-3 gap-2.5 sm:flex sm:flex-wrap sm:gap-4">
                                             {[
                                                 { id: "bank_deposit", label: "Bank Deposit", icon: Landmark },
                                                 { id: "mobile_money", label: "Mobile Money", icon: Smartphone },
@@ -402,25 +532,27 @@ export default function SendMoney() {
                                             ].map((method) => (
                                                 <div
                                                     key={method.id}
+                                                    role="button"
+                                                    aria-pressed={deliveryMethod === method.id}
                                                     onClick={() => setDeliveryMethod(method.id)}
                                                     className={`
-                                                        flex items-center gap-2 px-6 py-3 rounded-full cursor-pointer transition-all font-medium
+                                                        flex flex-col sm:flex-row items-center justify-center text-center gap-1.5 sm:gap-2 px-2 py-3.5 sm:px-6 sm:py-3 lg:px-4 lg:py-2 rounded-2xl sm:rounded-full cursor-pointer transition-all font-medium text-[13px] max-sm:leading-tight sm:text-base lg:text-sm active:scale-[0.98]
                                                         ${deliveryMethod === method.id
-                                                            ? "bg-primary/10 text-primary border border-primary/20 shadow-sm"
-                                                            : "text-gray-500 hover:bg-gray-50 border border-transparent"}
+                                                            ? "bg-primary/10 text-primary border border-primary/30 sm:border-primary/20 shadow-sm ring-1 ring-primary/20 sm:ring-0"
+                                                            : "bg-white sm:bg-transparent text-gray-600 sm:text-gray-500 hover:bg-gray-50 border border-gray-200 sm:border-transparent"}
                                                     `}
                                                 >
-                                                    <method.icon className={`w-5 h-5 ${deliveryMethod === method.id ? "text-primary" : "text-gray-400"}`} />
+                                                    <method.icon className={`w-5 h-5 lg:w-4 lg:h-4 ${deliveryMethod === method.id ? "text-primary" : "text-gray-400"}`} />
                                                     {method.label}
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4 pt-4">
+                                    <div className="space-y-1 sm:space-y-4 lg:space-y-0.5 pt-1 pb-2 px-3 sm:px-0 sm:pb-0 sm:pt-4 lg:pt-1 lg:text-sm rounded-2xl sm:rounded-none border border-gray-100 sm:border-0 bg-white sm:bg-transparent">
                                         <div className="flex items-center justify-between py-2">
                                             <div className="flex items-center gap-3 text-gray-600">
-                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                                <div className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                                     <Wallet className="w-4 h-4" />
                                                 </div>
                                                 <span>Amount Sent</span>
@@ -429,38 +561,46 @@ export default function SendMoney() {
                                         </div>
                                         <div className="flex items-center justify-between py-2">
                                             <div className="flex items-center gap-3 text-gray-600">
-                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                                <div className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                                     <BarChart3 className="w-4 h-4" />
                                                 </div>
                                                 <span>Fee</span>
                                             </div>
                                             <span className="font-medium">{fee.toFixed(2)} GBP</span>
                                         </div>
-                                        <div className="flex items-center justify-between py-2 bg-primary/5 px-4 rounded-lg -mx-4">
-                                            <div className="flex items-center gap-3 text-gray-600">
-                                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                        <div className="flex items-center justify-between gap-3 py-2 bg-primary/5 px-3 sm:px-4 rounded-lg -mx-1 sm:-mx-4">
+                                            <div className="flex items-center gap-3 text-gray-600 whitespace-nowrap">
+                                                <div className="w-8 h-8 lg:w-7 lg:h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                                                     <ArrowRightLeft className="w-4 h-4" />
                                                 </div>
                                                 <span>Exchange Rate</span>
                                             </div>
-                                            <span className="font-medium text-gray-900">1 GBP = {EXCHANGE_RATE.toFixed(2)} USD</span>
+                                            <span className="font-medium text-gray-900 text-right text-sm sm:text-base whitespace-nowrap">1 GBP = {EXCHANGE_RATE.toFixed(2)} NGN</span>
                                         </div>
                                     </div>
 
-                                    <div className="pt-4 flex gap-3">
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleBack}
-                                            className="flex-1 h-14 text-lg rounded-xl"
-                                        >
-                                            Back
-                                        </Button>
-                                        <Button
-                                            onClick={handleNext}
-                                            className="flex-1 h-14 text-lg bg-primary hover:bg-primary/90 rounded-xl"
-                                        >
-                                            Continue
-                                        </Button>
+                                    <div className={actionBarClass}>
+                                        <MobileActionSummary
+                                            label="You send"
+                                            value={`${(parseFloat(amount) || 0).toFixed(2)} GBP`}
+                                            subLabel="They receive"
+                                            subValue={`${parseFloat(receiveAmount || "0").toLocaleString('en-GB', { minimumFractionDigits: 2 })} NGN`}
+                                        />
+                                        <div className="flex gap-3">
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleBack}
+                                                className={actionBtnClass}
+                                            >
+                                                Back
+                                            </Button>
+                                            <Button
+                                                onClick={handleNext}
+                                                className={`${actionBtnClass} bg-primary hover:bg-primary/90`}
+                                            >
+                                                Continue
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -486,12 +626,12 @@ export default function SendMoney() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">Exchange Rate</span>
-                                                    <span className="font-medium text-gray-900">1 GBP = {EXCHANGE_RATE.toFixed(2)} USD</span>
+                                                    <span className="font-medium text-gray-900">1 GBP = {EXCHANGE_RATE.toFixed(2)} NGN</span>
                                                 </div>
 
                                                 <div className="pt-4 mt-4 border-t flex justify-between items-center">
                                                     <span className="text-gray-600 font-medium">They Receive</span>
-                                                    <span className="font-bold text-lg text-teal">{receiveAmount} USD</span>
+                                                    <span className="font-bold text-lg text-teal">{receiveAmount} NGN</span>
                                                 </div>
                                             </CardContent>
                                         </Card>
@@ -506,22 +646,47 @@ export default function SendMoney() {
                             <motion.div
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 w-full"
+                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-6 w-full"
                             >
                                 {/* Left Column: Recipient Selection */}
-                                <div className="lg:col-span-3 space-y-8">
-                                    <div className="space-y-6">
+                                <div className="lg:col-span-3 space-y-8 lg:space-y-5">
+                                    <div className="space-y-5 sm:space-y-6">
                                         <Button
                                             variant="outline"
                                             onClick={handleBack}
-                                            className="gap-2 text-gray-600 hover:text-gray-900"
+                                            className="gap-2 h-10 sm:h-auto text-gray-600 hover:text-gray-900"
                                         >
                                             <ArrowLeft className="w-4 h-4" />
                                             Back
                                         </Button>
-                                        <h2 className="text-xl font-bold text-gray-900">Who are you sending to?</h2>
+                                        <h2 className="text-lg sm:text-xl lg:text-lg font-bold text-gray-900">Who are you sending to?</h2>
 
-                                        {recentRecipients.length === 0 ? (
+                                        {beneficiariesQuery.isLoading ? (
+                                            /* ── Loading saved recipients ── */
+                                            <div className="space-y-2" aria-busy="true" aria-label="Loading recipients">
+                                                {[0, 1, 2].map(i => (
+                                                    <div key={i} className="flex items-center gap-3 p-3.5 sm:p-4 rounded-2xl sm:rounded-xl border border-gray-100 bg-white animate-pulse">
+                                                        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gray-100" />
+                                                        <div className="flex-1 space-y-2">
+                                                            <div className="h-3.5 w-2/5 rounded bg-gray-100" />
+                                                            <div className="h-3 w-1/4 rounded bg-gray-100" />
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : beneficiariesQuery.isError ? (
+                                            /* ── Error loading recipients ── */
+                                            <div className="flex flex-col items-center text-center py-10 px-6 space-y-4 rounded-2xl border border-destructive/20 bg-destructive/5">
+                                                <AlertCircle className="w-8 h-8 text-destructive" />
+                                                <div className="space-y-1">
+                                                    <h3 className="font-bold text-foreground">We couldn't load your recipients</h3>
+                                                    <p className="text-sm text-muted-foreground">Please check your connection and try again.</p>
+                                                </div>
+                                                <Button variant="outline" className="h-11 sm:h-auto rounded-xl" onClick={() => beneficiariesQuery.refetch()}>
+                                                    Try again
+                                                </Button>
+                                            </div>
+                                        ) : recentRecipients.length === 0 ? (
                                             /* ── NEW CUSTOMER: Empty State ── */
                                             <motion.div
                                                 initial={{ opacity: 0, y: 10 }}
@@ -548,7 +713,8 @@ export default function SendMoney() {
 
                                                 {/* Primary CTA */}
                                                 <Button
-                                                    onClick={() => { setSelectedRecipient(null); handleNext(); }}
+                                                    onClick={() => setShowAddRecipient(true)}
+                                                    data-testid="button-add-first-recipient"
                                                     className="h-12 px-8 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-semibold gap-2 shadow-sm"
                                                 >
                                                     <UserPlus className="w-4 h-4" />
@@ -566,10 +732,10 @@ export default function SendMoney() {
                                                 {/* Recent Recipients - Circles */}
                                                 <div className="space-y-4">
                                                     <Label className="text-gray-500 font-medium">Recent Recipients</Label>
-                                                    <div className="flex gap-6 overflow-x-auto pb-4">
+                                                    <div className="flex gap-3 sm:gap-6 overflow-x-auto pb-3 sm:pb-4 -mx-3 px-3 sm:mx-0 sm:px-0 snap-x">
                                                         {recentRecipients.slice(0, 5).map(r => (
-                                                            <div key={r.id} className="flex flex-col items-center gap-2 cursor-pointer group min-w-[80px]" onClick={() => { sessionStorage.removeItem("isNewCustomer"); setSelectedRecipient(r); handleNext(); }}>
-                                                                <div className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg ${r.color} group-hover:ring-2 ring-primary ring-offset-2 transition-all`}>
+                                                            <div key={r.id} className="flex flex-col items-center gap-2 cursor-pointer group min-w-[72px] sm:min-w-[80px] snap-start active:scale-95 transition-transform" onClick={() => selectRecipient(r)}>
+                                                                <div className={`w-14 h-14 lg:w-12 lg:h-12 rounded-full flex items-center justify-center font-bold text-lg lg:text-base ${r.color} group-hover:ring-2 ring-primary ring-offset-2 transition-all`}>
                                                                     {r.initials}
                                                                 </div>
                                                                 <span className="text-xs font-medium text-gray-600 text-center truncate w-full">{r.name.split(' ')[0]}</span>
@@ -579,48 +745,68 @@ export default function SendMoney() {
                                                 </div>
 
                                                 {/* Search and New Recipient */}
-                                                <div className="flex gap-4">
-                                                    <div className="relative flex-1">
+                                                <div className="flex gap-2.5 sm:gap-4">
+                                                    <div className="relative flex-1 min-w-0">
                                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                                         <input
-                                                            type="text"
+                                                            type="search"
+                                                            value={recipientSearch}
+                                                            onChange={e => setRecipientSearch(e.target.value)}
+                                                            aria-label="Search recipient"
                                                             placeholder="Search recipient"
-                                                            className="w-full h-10 pl-10 pr-4 rounded-lg border focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                                                            className="w-full h-11 sm:h-10 pl-10 pr-4 rounded-xl sm:rounded-lg border bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                                                         />
                                                     </div>
-                                                    <Button variant="outline" className="gap-2 h-10 whitespace-nowrap bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm" onClick={() => { setSelectedRecipient(null); handleNext(); }}>
+                                                    <Button variant="outline" className="gap-2 h-11 sm:h-10 px-3 sm:px-4 rounded-xl sm:rounded-md whitespace-nowrap bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm" onClick={() => setShowAddRecipient(true)} data-testid="button-new-recipient">
                                                         <UserPlus className="w-4 h-4" />
-                                                        New Recipient
+                                                        <span className="hidden min-[360px]:inline">New Recipient</span><span className="min-[360px]:hidden">New</span>
                                                     </Button>
                                                 </div>
 
                                                 {/* All Recipients List */}
-                                                <div className="space-y-1">
-                                                    {recentRecipients.map(r => (
+                                                <div className="space-y-2 sm:space-y-1">
+                                                    {filteredRecipients.length === 0 && (
+                                                        <p className="text-sm text-muted-foreground text-center py-6">
+                                                            No recipients match "{recipientSearch}".{" "}
+                                                            <button type="button" className="text-primary font-medium hover:underline" onClick={() => setShowAddRecipient(true)}>Add a new recipient</button>
+                                                        </p>
+                                                    )}
+                                                    {filteredRecipients.map(r => (
                                                         <div
                                                             key={r.id}
-                                                            onClick={() => { sessionStorage.removeItem("isNewCustomer"); setSelectedRecipient(r); handleNext(); }}
-                                                            className="flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
+                                                            role="button"
+                                                            data-testid={`recipient-row-${r.id}`}
+                                                            onClick={() => selectRecipient(r)}
+                                                            className="flex items-center justify-between gap-3 p-3.5 sm:p-4 lg:py-3 bg-white sm:bg-transparent border border-gray-100 sm:border-0 shadow-[0_1px_2px_rgba(0,0,0,0.03)] sm:shadow-none hover:bg-gray-50 active:bg-gray-50 rounded-2xl sm:rounded-xl cursor-pointer transition-colors group"
                                                         >
-                                                            <div className="flex items-center gap-4">
-                                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm ${r.color} relative`}>
+                                                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                                                <div className={`w-11 h-11 sm:w-12 sm:h-12 lg:w-10 lg:h-10 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${r.color} relative`}>
                                                                     {r.initials}
                                                                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
                                                                 </div>
-                                                                <div>
-                                                                    <div className="font-bold text-gray-900">{r.name}</div>
-                                                                    <div className="text-sm text-gray-500">{r.bank}</div>
+                                                                <div className="min-w-0">
+                                                                    <div className="font-bold text-gray-900 truncate">{r.name}</div>
+                                                                    <div className="text-sm text-gray-500 truncate">{r.bank}</div>
+                                                                    {/* Banking detail chip (Rhemito) */}
+                                                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                                                        <span className="inline-flex items-center text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
+                                                                            Acct: {maskAccount(r.account)}
+                                                                        </span>
+                                                                    </div>
+                                                                    {r.narration && (
+                                                                        <div className="text-xs text-gray-400 italic mt-0.5 truncate max-w-[200px] sm:max-w-[260px]">"{r.narration}"</div>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                            <div className="text-right text-sm">
-                                                                <div className="text-primary font-medium">Bank Deposit</div>
-                                                                <div className="text-gray-400">{r.account}</div>
+                                                            <div className="text-right text-xs sm:text-sm shrink-0">
+                                                                <div className="text-primary font-medium">{r.serviceType}</div>
+                                                                <div className="text-gray-400 font-mono">{r.currency}</div>
                                                             </div>
                                                         </div>
                                                     ))}
                                                 </div>
 
-                                                <Button className="w-full h-12 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl">
+                                                <Button className="w-full h-12 lg:h-10 bg-primary/10 text-primary hover:bg-primary/15 sm:bg-primary sm:hover:bg-primary/90 sm:text-white font-semibold sm:font-medium rounded-xl">
                                                     Show More
                                                 </Button>
                                             </>
@@ -652,7 +838,7 @@ export default function SendMoney() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">They Receive</span>
-                                                    <span className="font-medium text-gray-900">{receiveAmount} USD</span>
+                                                    <span className="font-medium text-gray-900">{receiveAmount} NGN</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">Transaction Fee</span>
@@ -660,7 +846,7 @@ export default function SendMoney() {
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-600">Exchange Rate</span>
-                                                    <span className="font-medium text-gray-900">1 GBP = {EXCHANGE_RATE.toFixed(2)} USD</span>
+                                                    <span className="font-medium text-gray-900">1 GBP = {EXCHANGE_RATE.toFixed(2)} NGN</span>
                                                 </div>
                                                 <div className="flex justify-between pt-2">
                                                     <span className="text-gray-600">Collection Method</span>
@@ -678,37 +864,59 @@ export default function SendMoney() {
                             <motion.div
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 w-full"
+                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-6 w-full"
                             >
                                 {/* Left Column: Form Details */}
-                                <div className="lg:col-span-3 space-y-8">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="text-lg">Recipient Details</CardTitle>
+                                <div className="lg:col-span-3 space-y-8 lg:space-y-5">
+                                    <Card className="rounded-2xl sm:rounded-xl">
+                                        <CardHeader className="px-4 sm:px-6 lg:pt-5 lg:pb-4">
+                                            <CardTitle className="text-lg lg:text-base">Recipient Details</CardTitle>
                                         </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div className="grid grid-cols-2 gap-4">
+                                        <CardContent className="space-y-4 px-4 sm:px-6">
+                                            {isBusinessRecipient ? (
                                                 <div className="space-y-2">
-                                                    <Label>First Name</Label>
+                                                    <Label htmlFor="rd-first-name">Business Name <span className="text-destructive">*</span></Label>
                                                     <Input
-                                                        defaultValue={selectedRecipient?.name?.split(' ')[0] || ""}
-                                                        onChange={e => setRecipientDetails({ ...recipientDetails, firstName: e.target.value })}
+                                                        id="rd-first-name"
+                                                        className="h-11 sm:h-9"
+                                                        value={recipientDetails.firstName}
+                                                        onChange={e => updateDetail("firstName", e.target.value)}
+                                                        aria-invalid={Boolean(detailErrors.firstName)}
                                                     />
+                                                    {detailErrors.firstName && <p className="text-xs text-destructive">{detailErrors.firstName}</p>}
+                                                </div>
+                                            ) : (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="rd-first-name">First Name <span className="text-destructive">*</span></Label>
+                                                    <Input
+                                                        id="rd-first-name"
+                                                        className="h-11 sm:h-9"
+                                                        value={recipientDetails.firstName}
+                                                        onChange={e => updateDetail("firstName", e.target.value)}
+                                                        aria-invalid={Boolean(detailErrors.firstName)}
+                                                    />
+                                                    {detailErrors.firstName && <p className="text-xs text-destructive">{detailErrors.firstName}</p>}
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <Label>Last Name</Label>
+                                                    <Label htmlFor="rd-last-name">Last Name <span className="text-destructive">*</span></Label>
                                                     <Input
-                                                        defaultValue={selectedRecipient?.name?.split(' ')[1] || ""}
-                                                        onChange={e => setRecipientDetails({ ...recipientDetails, lastName: e.target.value })}
+                                                        id="rd-last-name"
+                                                        className="h-11 sm:h-9"
+                                                        value={recipientDetails.lastName}
+                                                        onChange={e => updateDetail("lastName", e.target.value)}
+                                                        aria-invalid={Boolean(detailErrors.lastName)}
                                                     />
+                                                    {detailErrors.lastName && <p className="text-xs text-destructive">{detailErrors.lastName}</p>}
                                                 </div>
                                             </div>
+                                            )}
 
-                                            <div className="grid grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div className="space-y-2">
                                                     <Label>Relationship</Label>
-                                                    <Select defaultValue="family">
-                                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <Select value={recipientDetails.relationship} onValueChange={val => updateDetail("relationship", val)}>
+                                                        <SelectTrigger className="h-11 sm:h-9 text-base sm:text-sm"><SelectValue /></SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="family">Family</SelectItem>
                                                             <SelectItem value="friend">Friend</SelectItem>
@@ -717,50 +925,134 @@ export default function SendMoney() {
                                                     </Select>
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <Label>Nickname (Optional)</Label>
-                                                    <Input placeholder="e.g. My Brother" />
+                                                    <Label htmlFor="rd-nickname">Nickname (Optional)</Label>
+                                                    <Input
+                                                        id="rd-nickname"
+                                                        className="h-11 sm:h-9"
+                                                        placeholder="e.g. My Brother"
+                                                        value={recipientDetails.nickName}
+                                                        onChange={e => updateDetail("nickName", e.target.value)}
+                                                    />
                                                 </div>
                                             </div>
 
                                             <div className="space-y-2">
-                                                <Label>Reason for transfer</Label>
-                                                <Select defaultValue="family_support">
-                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <Label>Reason for transfer <span className="text-destructive">*</span></Label>
+                                                <Select value={recipientDetails.reason} onValueChange={val => updateDetail("reason", val)}>
+                                                    <SelectTrigger className="h-11 sm:h-9 text-base sm:text-sm"><SelectValue /></SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="family_support">Family Support</SelectItem>
                                                         <SelectItem value="education">Education</SelectItem>
                                                         <SelectItem value="bills">Bills</SelectItem>
+                                                        <SelectItem value="medical">Medical Expenses</SelectItem>
+                                                        <SelectItem value="other">Other</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
 
+                                            {recipientDetails.reason === "other" && (
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="rd-other-reason">Please specify reason <span className="text-destructive">*</span></Label>
+                                                    <Input
+                                                        id="rd-other-reason"
+                                                        className="h-11 sm:h-9"
+                                                        placeholder="e.g. Consulting, Event sponsorship, etc."
+                                                        value={recipientDetails.otherReason}
+                                                        onChange={e => updateDetail("otherReason", e.target.value)}
+                                                        aria-invalid={Boolean(detailErrors.otherReason)}
+                                                    />
+                                                    {detailErrors.otherReason && <p className="text-xs text-destructive">{detailErrors.otherReason}</p>}
+                                                </div>
+                                            )}
+
                                             <div className="space-y-2">
-                                                <Label>Narration <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                                                <Label htmlFor="rd-narration">Narration{" "}
+                                                    {requiresNarration(recipientDetails.country)
+                                                        ? <span className="text-destructive">*</span>
+                                                        : <span className="text-muted-foreground font-normal">(Optional)</span>}
+                                                </Label>
                                                 <Textarea
+                                                    id="rd-narration"
                                                     placeholder="e.g. Monthly allowance for February"
                                                     value={recipientDetails.narration}
-                                                    onChange={e => setRecipientDetails({ ...recipientDetails, narration: e.target.value })}
-                                                    className="resize-none"
+                                                    onChange={e => updateDetail("narration", e.target.value)}
+                                                    className="resize-none text-base sm:text-sm"
                                                     rows={3}
+                                                    aria-invalid={Boolean(detailErrors.narration)}
                                                 />
+                                                {detailErrors.narration
+                                                    ? <p className="text-xs text-destructive">{detailErrors.narration}</p>
+                                                    : requiresNarration(recipientDetails.country) && <p className="text-xs text-amber-600">Narration is required for Nigerian accounts.</p>}
                                             </div>
                                         </CardContent>
                                     </Card>
 
-                                    <div className="pt-4 flex gap-3">
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleBack}
-                                            className="flex-1 h-14 text-lg rounded-xl"
-                                        >
-                                            Back
-                                        </Button>
-                                        <Button
-                                            onClick={handleNext}
-                                            className="flex-1 h-14 text-lg bg-primary hover:bg-primary/90 rounded-xl"
-                                        >
-                                            Continue
-                                        </Button>
+                                    {/* Banking Details — Rhemito: NGN needs bank name + 10-digit account number */}
+                                    <Card className="rounded-2xl sm:rounded-xl">
+                                        <CardHeader className="px-4 sm:px-6 lg:pt-5 lg:pb-4 flex flex-row items-center justify-between gap-3">
+                                            <CardTitle className="text-lg lg:text-base">Banking Details</CardTitle>
+                                            <span className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap">
+                                                {recipientDetails.country} · {recipientDetails.currency}
+                                            </span>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4 px-4 sm:px-6">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="rd-bank-name">Bank Name <span className="text-destructive">*</span></Label>
+                                                <Input
+                                                    id="rd-bank-name"
+                                                    className="h-11 sm:h-9"
+                                                    placeholder="e.g. GTBank, Access Bank"
+                                                    value={recipientDetails.bankName}
+                                                    onChange={e => updateDetail("bankName", e.target.value)}
+                                                    aria-invalid={Boolean(detailErrors.bankName)}
+                                                />
+                                                {detailErrors.bankName && <p className="text-xs text-destructive">{detailErrors.bankName}</p>}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="rd-account-number">Account Number <span className="text-destructive">*</span></Label>
+                                                <Input
+                                                    id="rd-account-number"
+                                                    className="h-11 sm:h-9 font-mono tracking-wide"
+                                                    placeholder="10-digit account number"
+                                                    inputMode="numeric"
+                                                    maxLength={10}
+                                                    value={recipientDetails.accountNumber}
+                                                    onChange={e => updateDetail("accountNumber", e.target.value.replace(/\D/g, ""))}
+                                                    aria-invalid={Boolean(detailErrors.accountNumber)}
+                                                />
+                                                {detailErrors.accountNumber && <p className="text-xs text-destructive">{detailErrors.accountNumber}</p>}
+                                            </div>
+                                            {selectedRecipient?.uniqueCode && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    Saved recipient · Unique code <span className="font-mono font-semibold text-foreground">{selectedRecipient.uniqueCode}</span>
+                                                </p>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+
+                                    <div className={actionBarClass}>
+                                        <MobileActionSummary
+                                            label="Total to pay"
+                                            value={`${(parseFloat(amount || "0") + effectiveFee).toFixed(2)} GBP`}
+                                            subLabel="They receive"
+                                            subValue={`${parseFloat(receiveAmount || "0").toLocaleString('en-GB', { minimumFractionDigits: 2 })} NGN`}
+                                        />
+                                        <div className="flex gap-3">
+                                            <Button
+                                                variant="outline"
+                                                onClick={handleBack}
+                                                className={actionBtnClass}
+                                            >
+                                                Back
+                                            </Button>
+                                            <Button
+                                                onClick={handleDetailsContinue}
+                                                data-testid="button-details-continue"
+                                                className={`${actionBtnClass} bg-primary hover:bg-primary/90`}
+                                            >
+                                                Continue
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -805,8 +1097,8 @@ export default function SendMoney() {
                         {/* Step 4: Summary */}
                         {currentStep === 4 && (
                             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}>
-                                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 w-full pb-10">
-                                    <div className="lg:col-span-3 space-y-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-6 w-full lg:pb-10">
+                                    <div className="lg:col-span-3 space-y-4 sm:space-y-6">
 
                                         {/* Info Banner */}
                                         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
@@ -817,17 +1109,17 @@ export default function SendMoney() {
                                         </div>
 
                                         {/* Amount Section */}
-                                        <Card className="shadow-sm border-border">
-                                            <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                                        <Card className="shadow-sm border-border rounded-2xl sm:rounded-xl">
+                                            <CardHeader className="pb-3 px-4 sm:px-6 border-b flex flex-row items-center justify-between">
                                                 <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                                                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
                                                         <Wallet className="w-3.5 h-3.5 text-primary" />
                                                     </div>
                                                     Transfer Amount
                                                 </CardTitle>
-                                                <button onClick={() => setCurrentStep(1)} className="text-xs text-primary hover:underline font-medium">Edit</button>
+                                                <button onClick={() => setCurrentStep(1)} className="text-xs text-primary hover:underline font-semibold sm:font-medium px-3 py-1.5 -mr-2 sm:p-0 sm:mr-0 rounded-full bg-primary/10 sm:bg-transparent">Edit</button>
                                             </CardHeader>
-                                            <CardContent className="pt-4 space-y-3 text-sm">
+                                            <CardContent className="pt-4 px-4 sm:px-6 space-y-3 text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-muted-foreground">You Send</span>
                                                     <span className="font-semibold text-foreground">{parseFloat(amount).toFixed(2)} GBP</span>
@@ -852,21 +1144,21 @@ export default function SendMoney() {
                                         </Card>
 
                                         {/* Recipient Section */}
-                                        <Card className="shadow-sm border-border">
-                                            <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                                        <Card className="shadow-sm border-border rounded-2xl sm:rounded-xl">
+                                            <CardHeader className="pb-3 px-4 sm:px-6 border-b flex flex-row items-center justify-between">
                                                 <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                                                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
                                                         <User className="w-3.5 h-3.5 text-primary" />
                                                     </div>
                                                     Recipient Details
                                                 </CardTitle>
-                                                <button onClick={() => setCurrentStep(3)} className="text-xs text-primary hover:underline font-medium">Edit</button>
+                                                <button onClick={() => setCurrentStep(3)} className="text-xs text-primary hover:underline font-semibold sm:font-medium px-3 py-1.5 -mr-2 sm:p-0 sm:mr-0 rounded-full bg-primary/10 sm:bg-transparent">Edit</button>
                                             </CardHeader>
-                                            <CardContent className="pt-4 space-y-3 text-sm">
+                                            <CardContent className="pt-4 px-4 sm:px-6 space-y-3 text-sm">
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-muted-foreground">Full Name</span>
                                                     <span className="font-semibold text-foreground">
-                                                        {selectedRecipient ? selectedRecipient.name : `${recipientDetails.firstName || "—"} ${recipientDetails.lastName || ""}`.trim()}
+                                                        {detailsFullName}
                                                     </span>
                                                 </div>
                                                 <div className="flex justify-between items-center">
@@ -875,22 +1167,18 @@ export default function SendMoney() {
                                                 </div>
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-muted-foreground">Reason for Transfer</span>
-                                                    <span className="font-semibold text-foreground capitalize">{recipientDetails.reason.replace('_', ' ')}</span>
+                                                    <span className="font-semibold text-foreground capitalize text-right">{reasonLabel}</span>
                                                 </div>
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-muted-foreground">Bank Account</span>
                                                     <span className="font-semibold text-foreground font-mono">
-                                                        {selectedRecipient ? selectedRecipient.account : "12345678"}
+                                                        {recipientDetails.accountNumber || "—"}
                                                     </span>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-muted-foreground">Sort Code</span>
-                                                    <span className="font-semibold text-foreground font-mono">60-60-04</span>
                                                 </div>
                                                 <div className="flex justify-between items-center">
                                                     <span className="text-muted-foreground">Bank</span>
                                                     <span className="font-semibold text-foreground">
-                                                        {selectedRecipient ? selectedRecipient.bank : (recipientDetails.bankName || "—")}
+                                                        {recipientDetails.bankName || "—"}
                                                     </span>
                                                 </div>
                                                 {recipientDetails.narration && (
@@ -903,14 +1191,14 @@ export default function SendMoney() {
                                         </Card>
 
                                         {/* Total to Pay */}
-                                        <div className="rounded-xl bg-primary/5 border border-primary/15 p-5 flex items-center justify-between">
+                                        <div className="rounded-2xl sm:rounded-xl bg-primary/5 border border-primary/15 p-4 sm:p-5 flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-sm text-muted-foreground mb-0.5">Total to Pay</p>
-                                                <p className="text-2xl font-bold text-foreground">{totalPay.toFixed(2)} GBP</p>
+                                                <p className="text-xl sm:text-2xl lg:text-xl font-bold text-foreground">{totalPay.toFixed(2)} GBP</p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-sm text-muted-foreground mb-0.5">They Receive</p>
-                                                <p className="text-xl font-bold text-teal">{parseFloat(finalReceiveAmount).toLocaleString('en-GB', { minimumFractionDigits: 2 })} NGN</p>
+                                                <p className="text-lg sm:text-xl lg:text-lg font-bold text-teal">{parseFloat(finalReceiveAmount).toLocaleString('en-GB', { minimumFractionDigits: 2 })} NGN</p>
                                             </div>
                                         </div>
 
@@ -923,11 +1211,18 @@ export default function SendMoney() {
                                         </div>
 
                                         {/* Action Buttons */}
-                                        <div className="flex gap-3 pt-2">
+                                        <div className={cn(actionBarClass, "lg:pt-2")}>
+                                            <MobileActionSummary
+                                                label="Total to pay"
+                                                value={`${totalPay.toFixed(2)} GBP`}
+                                                subLabel="They receive"
+                                                subValue={`${parseFloat(finalReceiveAmount).toLocaleString('en-GB', { minimumFractionDigits: 2 })} NGN`}
+                                            />
+                                            <div className="flex gap-3">
                                             <Button
                                                 variant="outline"
                                                 onClick={handleBack}
-                                                className="flex-1 h-14 text-base rounded-xl border-border hover:bg-muted"
+                                                className="flex-1 h-12 lg:h-11 text-base rounded-xl border-border hover:bg-muted"
                                                 disabled={submittingTransaction}
                                             >
                                                 Back
@@ -935,7 +1230,7 @@ export default function SendMoney() {
                                             <Button
                                                 onClick={handleSubmitTransaction}
                                                 disabled={submittingTransaction}
-                                                className="flex-1 h-14 text-base rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
+                                                className="flex-[1.4] lg:flex-1 h-12 lg:h-11 text-base rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
                                             >
                                                 {submittingTransaction ? (
                                                     <span className="flex items-center gap-2">
@@ -946,6 +1241,7 @@ export default function SendMoney() {
                                                     "Confirm & Continue"
                                                 )}
                                             </Button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -997,14 +1293,14 @@ export default function SendMoney() {
                             <motion.div
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                className="grid grid-cols-1 lg:grid-cols-5 gap-8 pb-24"
+                                className="grid grid-cols-1 lg:grid-cols-5 gap-5 sm:gap-8 lg:gap-6 lg:pb-24"
                             >
                                 {/* Left Column: Input Sections */}
-                                <div className="lg:col-span-3 space-y-6">
+                                <div className="lg:col-span-3 space-y-4 sm:space-y-6">
 
                                     {/* Bonus Redemption Section */}
-                                    <Card className="border-green-100 bg-green-50/30">
-                                        <CardHeader className="pb-3">
+                                    <Card className="border-green-100 bg-green-50/30 rounded-2xl sm:rounded-xl">
+                                        <CardHeader className="pb-3 px-4 sm:px-6">
                                             <div className="flex items-center gap-2">
                                                 <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
                                                     <Wallet className="w-4 h-4" />
@@ -1012,7 +1308,7 @@ export default function SendMoney() {
                                                 <CardTitle className="text-base text-green-800">Referral Bonus Available</CardTitle>
                                             </div>
                                         </CardHeader>
-                                        <CardContent className="space-y-4">
+                                        <CardContent className="space-y-4 px-4 sm:px-6">
                                             <div className="flex items-start gap-3">
                                                 <Checkbox
                                                     id="use-bonus"
@@ -1030,13 +1326,13 @@ export default function SendMoney() {
                                                 </div>
                                             </div>
 
-                                            <div className="pl-7 space-y-3 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <div className="pl-0 sm:pl-7 space-y-3 pt-1 sm:pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
                                                 <p className="text-sm font-medium text-gray-700">How would you like to use it?</p>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                     <div
                                                         onClick={() => { setUseBonus(true); setBonusType('pay_less'); }}
                                                         className={`
-                                                            cursor-pointer border rounded-lg p-3 flex items-center gap-3 transition-all
+                                                            cursor-pointer border rounded-xl sm:rounded-lg p-3.5 sm:p-3 flex items-center gap-3 transition-all active:scale-[0.99]
                                                             ${useBonus && bonusType === 'pay_less' ? 'bg-green-100 border-green-300 ring-1 ring-green-300' : 'bg-white hover:bg-gray-50 border-gray-200'}
                                                         `}
                                                     >
@@ -1052,7 +1348,7 @@ export default function SendMoney() {
                                                     <div
                                                         onClick={() => { setUseBonus(true); setBonusType('send_more'); }}
                                                         className={`
-                                                            cursor-pointer border rounded-lg p-3 flex items-center gap-3 transition-all
+                                                            cursor-pointer border rounded-xl sm:rounded-lg p-3.5 sm:p-3 flex items-center gap-3 transition-all active:scale-[0.99]
                                                             ${useBonus && bonusType === 'send_more' ? 'bg-green-100 border-green-300 ring-1 ring-green-300' : 'bg-white hover:bg-gray-50 border-gray-200'}
                                                         `}
                                                     >
@@ -1070,11 +1366,11 @@ export default function SendMoney() {
                                     </Card>
 
                                     {/* Promo Code Section */}
-                                    <Card>
-                                        <CardHeader className="pb-4">
+                                    <Card className="rounded-2xl sm:rounded-xl">
+                                        <CardHeader className="pb-4 px-4 sm:px-6">
                                             <CardTitle className="text-base">Promo Code</CardTitle>
                                         </CardHeader>
-                                        <CardContent className="space-y-3">
+                                        <CardContent className="space-y-3 px-4 sm:px-6">
                                             <Label className="text-sm">Have a promo code?</Label>
                                             <div className="flex gap-2">
                                                 <Input
@@ -1085,11 +1381,12 @@ export default function SendMoney() {
                                                         setPromoApplied(false);
                                                         setPromoMessage("");
                                                     }}
-                                                    className="uppercase font-mono"
+                                                    className="uppercase font-mono h-11 sm:h-9 min-w-0 max-sm:placeholder:normal-case max-sm:placeholder:font-sans"
                                                     disabled={promoLoading}
                                                 />
                                                 <Button
                                                     variant="outline"
+                                                    className="h-11 sm:h-auto px-5 sm:px-4 shrink-0"
                                                     onClick={handleApplyPromo}
                                                     disabled={promoLoading || !promoCode}
                                                 >
@@ -1105,11 +1402,11 @@ export default function SendMoney() {
                                     </Card>
 
                                     {/* Payment Method Selection */}
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="text-lg">How would you like to pay?</CardTitle>
+                                    <Card className="rounded-2xl sm:rounded-xl">
+                                        <CardHeader className="px-4 sm:px-6 lg:pt-5 lg:pb-4">
+                                            <CardTitle className="text-lg lg:text-base">How would you like to pay?</CardTitle>
                                         </CardHeader>
-                                        <CardContent className="space-y-4">
+                                        <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
                                             {[
                                                 { id: "instant_bank", title: "Instant Pay By Bank", desc: `You pay GBP ${totalPay.toFixed(2)}`, icon: Landmark },
                                                 { id: "card", title: "Credit/Debit Card", desc: `You pay GBP ${totalPay.toFixed(2)}`, icon: CreditCard },
@@ -1140,25 +1437,27 @@ export default function SendMoney() {
                                                             setShowConfirmation(true);
                                                         }
                                                     }}
-                                                    className={`p-4 border rounded-xl cursor-pointer flex items-center gap-4 transition-all ${paymentMethod === method.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-gray-300"
+                                                    className={`p-3.5 sm:p-4 min-h-[68px] border rounded-2xl sm:rounded-xl cursor-pointer flex items-center gap-3 sm:gap-4 transition-all active:scale-[0.99] ${paymentMethod === method.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-gray-300"
                                                         }`}
                                                 >
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center bg-white border ${paymentMethod === method.id ? "text-primary border-primary" : "text-gray-500 border-gray-200"
+                                                    <div className={`w-11 h-11 sm:w-10 sm:h-10 shrink-0 rounded-full flex items-center justify-center border ${paymentMethod === method.id ? "text-primary border-primary bg-white" : "text-primary sm:text-gray-500 border-primary/10 sm:border-gray-200 bg-primary/5 sm:bg-white"
                                                         }`}>
                                                         <method.icon className="w-5 h-5" />
                                                     </div>
-                                                    <div>
+                                                    <div className="min-w-0">
                                                         <div className="font-medium">{method.title}</div>
                                                         <div className="text-xs text-muted-foreground">{method.desc}</div>
                                                     </div>
-                                                    {paymentMethod === method.id && <div className="ml-auto text-primary"><Check className="w-5 h-5" /></div>}
+                                                    {paymentMethod === method.id
+                                                        ? <div className="ml-auto text-primary shrink-0"><Check className="w-5 h-5" /></div>
+                                                        : <ChevronRight className="ml-auto w-5 h-5 text-gray-300 shrink-0 sm:hidden" />}
                                                 </div>
                                             ))}
                                         </CardContent>
                                     </Card>
 
 
-                                    <div className="mt-6 flex items-start gap-2 p-4 bg-yellow-50 rounded-lg text-yellow-800 text-sm">
+                                    <div className="mt-2 sm:mt-6 flex items-start gap-2 p-4 bg-yellow-50 rounded-2xl sm:rounded-lg text-yellow-800 text-sm">
                                         <Shield className="w-4 h-4 mt-0.5 shrink-0" />
                                         <p>By selecting a payment option, you agree to our Terms of Use and Privacy Policy. Funds are usually delivered within minutes.</p>
                                     </div>
@@ -1167,11 +1466,11 @@ export default function SendMoney() {
                                 {/* Right Column: Amount Summary (Sticky) */}
                                 <div className="lg:col-span-2">
                                     <div className="sticky top-6 space-y-6">
-                                        <Card className="border-2 border-gray-200 shadow-sm">
-                                            <CardHeader className="pb-4 bg-gray-50/50 border-b">
+                                        <Card className="border-2 border-gray-200 shadow-sm rounded-2xl sm:rounded-xl">
+                                            <CardHeader className="pb-4 px-4 sm:px-6 bg-gray-50/50 border-b">
                                                 <CardTitle className="text-base">Amount Summary</CardTitle>
                                             </CardHeader>
-                                            <CardContent className="space-y-3 text-sm pt-4">
+                                            <CardContent className="space-y-3 text-sm pt-4 px-4 sm:px-6">
                                                 {/* Promo Discount Row (Top if applied) - SAVE20 Style */}
                                                 {promoApplied && promoDiscount > 0 && (
                                                     <div className="flex justify-between font-medium text-gray-900">
@@ -1243,6 +1542,17 @@ export default function SendMoney() {
                                         </Card>
                                     </div>
                                 </div>
+
+                                {/* Mobile: docked amount recap (desktop keeps the sticky summary card). No Back here — same as desktop, the transaction is already submitted at this step. */}
+                                <div className={`${actionBarClass} lg:hidden`}>
+                                    <MobileActionSummary
+                                        label="Total to pay"
+                                        value={`${totalPay.toFixed(2)} GBP`}
+                                        subLabel="They receive"
+                                        subValue={`${parseFloat(finalReceiveAmount).toLocaleString('en-GB', { minimumFractionDigits: 2 })} NGN`}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground text-center">Choose a payment method above to continue</p>
+                                </div>
                             </motion.div>
                         )}
 
@@ -1251,12 +1561,12 @@ export default function SendMoney() {
                             <motion.div
                                 initial={{ opacity: 0, x: 20 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                className="w-full max-w-3xl mx-auto space-y-6 pb-10"
+                                className="w-full max-w-3xl mx-auto space-y-4 sm:space-y-6 pb-10"
                             >
                                 {/* Back Button */}
                                 <button
                                     onClick={() => { setShowBankTransferPage(false); setPaymentTimerActive(false); }}
-                                    className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group"
+                                    className="flex items-center gap-2 h-10 -ml-2 px-2 sm:h-auto sm:ml-0 sm:px-0 rounded-lg text-gray-600 hover:text-gray-900 transition-colors group"
                                 >
                                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
                                     <span className="text-sm font-medium">Back to Payment Methods</span>
@@ -1265,7 +1575,7 @@ export default function SendMoney() {
                                 {/* Status Tracker */}
                                 <Card className="border-2 border-gray-100 shadow-sm overflow-hidden">
                                     <div className="h-1 bg-gradient-to-r from-primary via-primary/70 to-primary" />
-                                    <CardContent className="pt-6 pb-5 px-6">
+                                    <CardContent className="pt-6 pb-5 px-3 sm:px-6">
                                         <div className="flex items-center justify-between relative">
                                             {/* Progress line behind circles */}
                                             <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-200 z-0" />
@@ -1325,8 +1635,8 @@ export default function SendMoney() {
                                                     ? 'border-red-200 bg-gradient-to-br from-red-50/80 via-white to-rose-50/60'
                                                     : 'border-primary/15 bg-gradient-to-br from-primary/[0.03] via-white to-purple-50/30'
                                             }`}>
-                                                <CardContent className="py-8 px-6">
-                                                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                                                <CardContent className="py-6 sm:py-8 px-4 sm:px-6">
+                                                    <div className="flex flex-col sm:flex-row items-center gap-5 sm:gap-6">
                                                         {/* Clock Face */}
                                                         <div className="relative shrink-0">
                                                             <motion.div
@@ -1523,11 +1833,11 @@ export default function SendMoney() {
                                                 <span className="text-lg font-bold text-gray-900 font-display">SamisOnline</span>
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                            <CardTitle className="text-lg font-bold">Pay with Bank Transfer</CardTitle>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <CardTitle className="text-base sm:text-lg font-bold">Pay with Bank Transfer</CardTitle>
                                             <button
                                                 onClick={handleCopyAll}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                                                className="flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 bg-gray-50 sm:bg-transparent hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap shrink-0"
                                                 title="Copy all details"
                                             >
                                                 {copiedField === 'all' ? (
@@ -1561,14 +1871,14 @@ export default function SendMoney() {
                                                 { label: "Bank Account Number", value: "1018984719", key: "account" },
                                                 { label: "Sort Code", value: "20-45-45", key: "sort" },
                                             ].map((item) => (
-                                                <div key={item.key} className="flex items-center justify-between py-3.5 px-4 hover:bg-gray-50/50 transition-colors">
+                                                <div key={item.key} className="flex items-center justify-between py-3 sm:py-3.5 px-3.5 sm:px-4 hover:bg-gray-50/50 transition-colors">
                                                     <div className="space-y-0.5 flex-1 min-w-0">
                                                         <p className="text-xs text-gray-500 font-medium">{item.label}</p>
                                                         <p className="text-sm font-semibold text-gray-900 truncate">{item.value}</p>
                                                     </div>
                                                     <button
                                                         onClick={() => handleCopy(item.value, item.key)}
-                                                        className="ml-3 p-2 hover:bg-gray-100 rounded-lg transition-colors shrink-0"
+                                                        className="ml-3 w-10 h-10 sm:w-auto sm:h-auto sm:p-2 flex items-center justify-center hover:bg-gray-100 rounded-lg transition-colors shrink-0"
                                                         title={`Copy ${item.label}`}
                                                     >
                                                         {copiedField === item.key ? (
@@ -1598,14 +1908,14 @@ export default function SendMoney() {
 
                                 {/* Navigate Away / Done */}
                                 <Card className="border-2 border-gray-100 shadow-sm">
-                                    <CardContent className="pt-5 pb-5 px-6 space-y-4">
+                                    <CardContent className="pt-5 pb-5 px-4 sm:px-6 space-y-4">
                                         {!transferComplete && (
                                             <Button
                                                 onClick={() => setLocation("/dashboard")}
                                                 variant="outline"
-                                                className="w-full h-14 text-base rounded-xl font-semibold border-2 border-gray-300 hover:border-primary/40 hover:bg-primary/5 transition-all"
+                                                className="w-full h-auto min-h-14 py-3 sm:py-2 sm:h-14 whitespace-normal sm:whitespace-nowrap text-base rounded-xl font-semibold border-2 border-gray-300 hover:border-primary/40 hover:bg-primary/5 transition-all"
                                             >
-                                                <div className="flex flex-col items-center gap-0.5">
+                                                <div className="flex flex-col items-center gap-0.5 max-sm:text-center max-sm:leading-snug">
                                                     <span>I've noted the details — take me to Dashboard</span>
                                                     <span className="text-xs font-normal text-gray-500">I'll complete the payment within 30 minutes</span>
                                                 </div>
@@ -1634,6 +1944,19 @@ export default function SendMoney() {
                     </div>
                 </div>
             </div>
+
+            {/* Add Recipient — Rhemito recipient form, locked to this corridor's country */}
+            <AddBeneficiaryModal
+                open={showAddRecipient}
+                onOpenChange={setShowAddRecipient}
+                lockedCountry={PAYOUT_COUNTRY}
+                defaultServiceType={serviceTypeForDeliveryMethod(deliveryMethod)}
+                onCreated={(created) => {
+                    setShowAddRecipient(false);
+                    setRecipientSearch("");
+                    selectRecipient(toRecipientRow(created));
+                }}
+            />
 
             {/* Session Extend Popup */}
             <AnimatePresence>
@@ -1712,12 +2035,26 @@ export default function SendMoney() {
                                                 : "Transaction submitted successfully."
                                     }
                                 </p>
-                                <Button
-                                    onClick={() => setShowConfirmation(false)}
-                                    className="w-full bg-green-600 hover:bg-green-700 text-white mt-2"
-                                >
-                                    OK
-                                </Button>
+                                <div className="w-full flex flex-col gap-2 mt-2">
+                                    <Button
+                                        data-testid="button-go-to-dashboard"
+                                        onClick={() => {
+                                            setShowConfirmation(false);
+                                            setLocation("/dashboard");
+                                        }}
+                                        className="w-full bg-green-600 hover:bg-green-700 text-white font-medium"
+                                    >
+                                        Go to Dashboard
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setShowConfirmation(false)}
+                                        className="w-full text-gray-500 hover:text-gray-700 text-xs"
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </div>
                             </div>
                         </motion.div>
                     </div>

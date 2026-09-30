@@ -156,7 +156,7 @@ export default function OtpStep({ email, devOtp, onBack }: OtpStepProps) {
         <button
           type="submit"
           disabled={loading || code.length !== 6 || expirySeconds <= 0}
-          className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-3 sm:py-2.5 text-base sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
             <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>

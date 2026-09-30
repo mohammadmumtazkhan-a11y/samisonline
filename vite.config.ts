@@ -17,7 +17,7 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "shared"),
     },
   },
-  root: "client",
+  root: path.resolve(__dirname, "client"),
   css: {
     transformer: "lightningcss",
     lightningcss: {
