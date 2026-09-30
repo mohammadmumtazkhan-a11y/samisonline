@@ -89,7 +89,7 @@ export default function CurrencyPicker({ value, onChange, exclude }: CurrencyPic
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-r border-gray-200 hover:bg-gray-100 transition-colors shrink-0 min-w-[110px] rounded-l-lg"
+        className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 border-r border-gray-200 hover:bg-gray-100 transition-colors shrink-0 min-w-[104px] sm:min-w-[110px] rounded-l-xl sm:rounded-l-lg"
       >
         <img
           src={selected?.flag}
@@ -123,7 +123,7 @@ export default function CurrencyPicker({ value, onChange, exclude }: CurrencyPic
                   placeholder="Search..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="flex-1 bg-transparent text-sm text-black placeholder:text-gray-400 focus:outline-none"
+                  className="flex-1 bg-transparent text-base sm:text-sm text-black placeholder:text-gray-400 focus:outline-none"
                 />
               </div>
             </div>

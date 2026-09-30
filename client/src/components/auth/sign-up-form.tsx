@@ -129,7 +129,7 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
   };
 
   const fieldClass = (name: string) =>
-    `w-full px-3 py-2.5 text-sm rounded-lg border focus:outline-none focus:ring-1 ${
+    `w-full px-3 py-2.5 text-base sm:text-sm rounded-lg border focus:outline-none focus:ring-1 ${
       errors[name]
         ? "border-red-400 focus:border-red-500 focus:ring-red-200"
         : "border-gray-300 focus:border-primary focus:ring-primary/20"
@@ -145,12 +145,12 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
             type="email"
             value={email}
             disabled
-            className="flex-1 px-3 py-2.5 text-sm rounded-lg border border-gray-200 bg-gray-50 text-gray-500"
+            className="flex-1 min-w-0 px-3 py-2.5 text-base sm:text-sm rounded-lg border border-gray-200 bg-gray-50 text-gray-500"
           />
           <button
             type="button"
             onClick={onBack}
-            className="text-xs text-primary hover:underline font-medium whitespace-nowrap"
+            className="text-xs text-primary hover:underline font-medium whitespace-nowrap shrink-0 max-sm:px-1 max-sm:py-2"
           >
             Edit email
           </button>
@@ -252,7 +252,7 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-3 sm:py-2.5 text-base sm:text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</> : "Create Account"}
           </button>
@@ -290,7 +290,7 @@ export default function SignUpForm({ email, onBack, onOtp, onBusinessStep2 }: Si
 
           <button
             type="submit"
-            className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-3 sm:py-2.5 text-base sm:text-sm transition-colors flex items-center justify-center gap-2"
           >
             Continue
           </button>

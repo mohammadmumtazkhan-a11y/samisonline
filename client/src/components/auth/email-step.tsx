@@ -62,7 +62,7 @@ export default function EmailStep({ onRegistered, onNew, onPending }: EmailStepP
             onChange={(e) => { setEmail(e.target.value); setError(""); }}
             placeholder="you@example.com"
             required
-            className={`w-full pl-10 pr-3 py-2.5 text-sm rounded-lg border focus:outline-none focus:ring-1 ${
+            className={`w-full pl-10 pr-3 py-2.5 text-base sm:text-sm rounded-lg border focus:outline-none focus:ring-1 ${
               error
                 ? "border-red-400 focus:border-red-500 focus:ring-red-200"
                 : "border-gray-300 focus:border-primary focus:ring-primary/20"
@@ -75,7 +75,7 @@ export default function EmailStep({ onRegistered, onNew, onPending }: EmailStepP
       <button
         type="submit"
         disabled={loading || !email}
-        className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-2.5 text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full bg-primary hover:bg-primary/90 text-white font-semibold rounded-lg py-3 sm:py-2.5 text-base sm:text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {loading ? (
           <>

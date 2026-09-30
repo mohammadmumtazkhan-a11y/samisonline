@@ -1,6 +1,7 @@
 import { pgTable, text, serial, timestamp, uuid, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { BENEFICIARY_SERVICE_TYPES, NIGERIA_ACCOUNT_REGEX, bankFieldsFor, requiresNarration } from "./beneficiaries";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -116,3 +117,57 @@ export const otpVerifySchema = z.object({
 
 export type AuthUser = typeof authUsers.$inferSelect;
 export type InsertAuthUser = typeof authUsers.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Beneficiaries (recipients) — same fields & rules as Rhemito's recipient form
+// ---------------------------------------------------------------------------
+
+export const insertBeneficiarySchema = z
+  .object({
+    recipientType: z.enum(["individual", "business"]),
+    firstName: z.string().trim().default(""),
+    lastName: z.string().trim().default(""),
+    businessName: z.string().trim().default(""),
+    email: z.string().trim().min(1, "Email address is required").email("Please enter a valid email address"),
+    country: z.string().min(1, "Country is required"),
+    bankName: z.string().trim().min(1, "Bank name is required"),
+    accountNumber: z.string().trim().min(1, "Account number is required"),
+    sortCode: z.string().trim().default(""),
+    iban: z.string().trim().default(""),
+    swift: z.string().trim().default(""),
+    serviceType: z.enum(BENEFICIARY_SERVICE_TYPES),
+    narration: z.string().trim().default(""),
+    relationship: z.string().trim().default("Personal"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.recipientType === "individual") {
+      if (!data.firstName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["firstName"], message: "First name is required" });
+      if (!data.lastName) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["lastName"], message: "Last name is required" });
+    } else if (!data.businessName) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["businessName"], message: "Business name is required" });
+    }
+
+    if (data.country === "Nigeria" && data.serviceType === "Bank Deposit" && data.accountNumber && !NIGERIA_ACCOUNT_REGEX.test(data.accountNumber)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["accountNumber"], message: "Nigerian account numbers are 10 digits" });
+    }
+
+    const fields = bankFieldsFor(data.country);
+    if (fields.sortCode && !data.sortCode) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sortCode"], message: "Sort code is required" });
+    if (fields.iban && !data.iban) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["iban"], message: "IBAN is required" });
+    if (fields.swift && !data.swift) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["swift"], message: "SWIFT / BIC is required" });
+
+    if (requiresNarration(data.country) && !data.narration) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["narration"], message: "Narration is required for Nigerian beneficiaries" });
+    }
+  });
+
+export type InsertBeneficiary = z.input<typeof insertBeneficiarySchema>;
+
+export type Beneficiary = z.output<typeof insertBeneficiarySchema> & {
+  id: string;
+  currency: string;
+  uniqueCode: string; // 6-digit payout identifier
+  createdAt: string;
+  /** Demo/seed record (hidden for brand-new customers). */
+  seed?: boolean;
+};
